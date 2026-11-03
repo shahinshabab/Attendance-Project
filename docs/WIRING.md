@@ -15,12 +15,22 @@ Board: 30-pin ESP32 DevKit (ESP-WROOM-32, CP2102), labels as printed on the boar
 | R307 GND | **GND** (left, next to VIN) | Shared with the button |
 | R307 TX | **RX2** (GPIO16) | Sensor sends → board receives |
 | R307 RX | **TX2** (GPIO17) | Board sends → sensor receives. Not detected? Swap TX/RX |
-| R307 Touch, 3.3V-T | not connected | Not used by this firmware |
-| OLED VCC | **3V3** (bottom right) | 3.3 V only |
-| OLED GND | **GND** (right, next to 3V3) | |
-| OLED SDA | **D21** | I²C data |
-| OLED SCL | **D22** | I²C clock |
-| IN/OUT button (optional) | **D25** and **GND** | Normally open; also cancels an enrollment |
+| R307 Touch | **D27** | Finger-detect output: the sensor (and its light) is only used while a finger touches it |
+| R307 3.3V-T | **3V3** | Power for the touch circuit |
+| TFT VCC, TFT LED | **3V3** | 1.8″ ST7735 128×160; LED is the backlight |
+| TFT GND | **GND** (right, next to 3V3) | |
+| TFT SCK | **D18** | SPI clock |
+| TFT SDA | **D23** | SPI data (MOSI) |
+| TFT A0 (DC/RS) | **D4** | Data/command |
+| TFT RESET | **D19** | |
+| TFT CS | **D5** | Chip select |
+| DS3231 VCC | **3V3** | Use 3.3 V so the module does not try to charge a CR2032 |
+| DS3231 GND | **GND** | |
+| DS3231 SDA | **D21** | I²C data (shared bus; address 0x68) |
+| DS3231 SCL | **D22** | I²C clock |
+| IN/OUT button (optional) | **D25** and **GND** | Normally open; manual IN/OUT when no shift is set; cancels an enrollment |
+
+3V3 feeds four wires and GND several: join them on a small rail or terminal block. The firmware detects the touch wire at boot; without it, it keeps polling the sensor (the light blinks). The DS3231 sets the clock at boot, so offline scans after a power cut keep their real time. The TFT display code follows the approved [screen designs](tft-screens.png); until then the old OLED can stay on D21/D22 alongside the DS3231.
 
 Power rules learned on this project:
 

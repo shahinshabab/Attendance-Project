@@ -101,6 +101,8 @@ class DeviceReport(BaseModel):
     capacity: int = Field(default=0, ge=0, le=65535)
     mode: Literal['IN', 'OUT'] = 'IN'
     clock_ok: bool = False
+    rtc: bool = False
+    touch: bool = False
     uptime_ms: int = Field(default=0, ge=0)
 
 

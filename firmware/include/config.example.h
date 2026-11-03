@@ -20,13 +20,21 @@ constexpr int SENSOR_TX = 12; // [D6] ESP TX -> R307 RX
 constexpr int OLED_SDA = 4;   // [D2]
 constexpr int OLED_SCL = 5;   // [D1]
 constexpr int MODE_BUTTON = 13; // [D7] optional normally-open button to GND; also cancels an enrollment
+constexpr int FINGER_TOUCH_PIN = -1; // no spare pin: poll the sensor
 constexpr unsigned MAX_PENDING_EVENTS = 150; // limited RAM
 #else
 constexpr int SENSOR_RX = 16; // ESP RX <- R307 TX
 constexpr int SENSOR_TX = 17; // ESP TX -> R307 RX
-constexpr int OLED_SDA = 21;
+constexpr int OLED_SDA = 21;  // I2C bus: OLED (0x3C) and DS3231 clock (0x68)
 constexpr int OLED_SCL = 22;
 constexpr int MODE_BUTTON = 25; // optional normally-open button to GND; also cancels an enrollment
+// R307 "Touch" (finger-detect) output. The sensor is only read while a finger touches it, so its
+// light stays off when idle. Polarity is detected at boot; if the wire is absent the firmware polls.
+constexpr int FINGER_TOUCH_PIN = 27;
+// 1.8" ST7735 TFT on the hardware SPI bus (SCK = D18, SDA/MOSI = D23 are fixed by the bus).
+constexpr int TFT_CS = 5;
+constexpr int TFT_DC = 4;   // labelled A0 or DC on the module
+constexpr int TFT_RST = 19;
 constexpr unsigned MAX_PENDING_EVENTS = 500;
 #endif
 constexpr unsigned long SENSOR_BAUD = 57600;

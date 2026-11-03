@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <RTClib.h>
 #if defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -22,7 +23,7 @@
 #include <algorithm>
 #include "config.h"
 
-constexpr char FIRMWARE_VERSION[] = "0.3.3";
+constexpr char FIRMWARE_VERSION[] = "0.4.0-dev";
 constexpr uint32_t WIFI_ATTEMPT_MS = 20000;   // per network before trying the other one
 constexpr uint32_t OFFICE_RETRY_MS = 300000;  // while on the fallback hotspot, retry office Wi-Fi
 constexpr uint32_t SYNC_INTERVAL_MS = 10000;  // server check-in: Wi-Fi updates and enrollment requests
@@ -79,6 +80,9 @@ String serialLine, screenLine = "Starting", screenDetail;
 uint32_t lastSend = 0, lastScan = 0, lastMatch = 0, lastSync = 0, lastResult = 0;
 uint16_t lastFinger = 0;
 bool requireRemoval = false, lastButton = HIGH;
+RTC_DS3231 rtc;
+bool rtcReady = false;
+int touchActive = -1;  // level of the R307 touch wire while a finger is present; -1 = no wire, poll the sensor
 
 // Office Wi-Fi comes from the server and is stored in flash; the fallback hotspot is built in.
 enum NetTarget : uint8_t { NET_OFFICE, NET_FALLBACK };
@@ -405,6 +409,42 @@ void runCommand(JsonObject command) {
   sendResult();
 }
 
+// ---- DS3231 battery clock: keeps UTC through power cuts while offline ----
+void startClock() {
+  if (!rtc.begin(&Wire)) { logMessage("DS3231 clock not found; time comes from the network only"); return; }
+  rtcReady = true;
+  if (rtc.lostPower()) { logMessage("DS3231 has no valid time (new or flat battery); waiting for network time"); return; }
+  time_t saved = rtc.now().unixtime();
+  if (saved > 1700000000) { struct timeval tv = {saved, 0}; settimeofday(&tv, nullptr); logMessage("Clock set from DS3231"); }
+}
+// The server time arrives over verified HTTPS; it corrects both the system clock and the DS3231.
+void trustServerTime(time_t serverTime) {
+  if (serverTime < 1700000000) return;
+  time_t now = time(nullptr);
+  if (now < 1700000000 || labs((long)(now - serverTime)) > 5) {
+    struct timeval tv = {serverTime, 0}; settimeofday(&tv, nullptr); logMessage("Clock set from server");
+  }
+  if (rtcReady && (rtc.lostPower() || labs((long)rtc.now().unixtime() - (long)serverTime) > 2)) {
+    rtc.adjust(DateTime((uint32_t)serverTime)); logMessage("DS3231 clock updated");
+  }
+}
+
+// ---- R307 touch wire: read the sensor only while a finger touches it, so its light stays off ----
+void detectTouchWire() {
+#if !defined(ESP8266)
+  if (FINGER_TOUCH_PIN < 0) return;
+  pinMode(FINGER_TOUCH_PIN, INPUT_PULLDOWN); delay(5); int pulledDown = digitalRead(FINGER_TOUCH_PIN);
+  pinMode(FINGER_TOUCH_PIN, INPUT_PULLUP); delay(5); int pulledUp = digitalRead(FINGER_TOUCH_PIN);
+  if (pulledDown == LOW && pulledUp == HIGH) {  // the line follows the pulls: nothing drives it
+    pinMode(FINGER_TOUCH_PIN, INPUT_PULLDOWN); logMessage("R307 touch wire not detected; polling the sensor"); return;
+  }
+  pinMode(FINGER_TOUCH_PIN, INPUT);
+  touchActive = pulledDown == HIGH ? LOW : HIGH;  // boot level means "no finger"
+  logMessage(String("R307 touch wire detected; finger = ") + (touchActive == HIGH ? "HIGH" : "LOW"));
+#endif
+}
+bool fingerTouched() { return touchActive < 0 || digitalRead(FINGER_TOUCH_PIN) == touchActive; }
+
 void syncServer() {
   if (lastSync && millis() - lastSync < SYNC_INTERVAL_MS) return;
   lastSync = millis();
@@ -415,7 +455,7 @@ void syncServer() {
   d["rssi"] = constrain(WiFi.RSSI(), -127, 0); d["wifi_version"] = wifiVersion; d["office_error"] = officeError;
   d["pending"] = pending.size(); d["sensor"] = sensorReady;
   d["templates"] = sensorReady ? finger.templateCount : 0; d["capacity"] = sensorReady ? finger.capacity : 0;
-  d["mode"] = isOut ? "OUT" : "IN"; d["clock_ok"] = time(nullptr) > 1700000000; d["uptime_ms"] = millis();
+  d["mode"] = isOut ? "OUT" : "IN"; d["clock_ok"] = time(nullptr) > 1700000000; d["rtc"] = rtcReady; d["touch"] = touchActive >= 0; d["uptime_ms"] = millis();
   String body, reply; serializeJson(d, body);
   bool wasOk = serverOk;
   int code = post("/api/device/sync", body, reply);
@@ -424,10 +464,7 @@ void syncServer() {
   DynamicJsonDocument answer(1536);
   if (deserializeJson(answer, reply)) return;
   // Server time over verified HTTPS covers offices where NTP is blocked.
-  time_t serverTime = answer["server_time"] | 0;
-  if (time(nullptr) < 1700000000 && serverTime > 1700000000) {
-    struct timeval tv = {serverTime, 0}; settimeofday(&tv, nullptr); logMessage("Clock set from server");
-  }
+  trustServerTime(answer["server_time"] | 0);
   if (answer["wifi"].is<JsonObject>()) { applyWifi(answer["wifi"].as<JsonObject>()); return; }
   if (answer["command"].is<JsonObject>()) runCommand(answer["command"].as<JsonObject>());
 }
@@ -472,7 +509,7 @@ void command(String line) {
       "; oled=" + String(displayReady) + "; oled_address=0x" + String(oledAddress, HEX) +
       "; storage=" + String(storageReady) + (storageReady ? fsUsage() : String("")) + "; pending=" + String(pending.size()) +
       "; mode=" + (isOut ? "OUT" : "IN") + "; capacity=" + String(finger.capacity) +
-      "; templates=" + String(finger.templateCount) + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
+      "; templates=" + String(finger.templateCount) + "; rtc=" + String(rtcReady) + "; touch=" + String(touchActive >= 0 ? (touchActive == HIGH ? "high" : "low") : "none") + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
       (USE_WIFI ? "; ssid=" + WiFi.SSID() + "; ip=" + WiFi.localIP().toString() + "; server=" + String(serverOk) +
        "; office_wifi=" + (hasOffice() ? officeSsid + " v" + String(wifiVersion) : String("none")) +
        (officeError.length() ? "; office_error=" + officeError : "") : ""));
@@ -508,6 +545,7 @@ void setup() {
   wifiVersion = settings.getUInt("wifi_ver", 0); resultId = settings.getInt("res_id", 0);
   pinMode(MODE_BUTTON, INPUT_PULLUP);
   Wire.begin(OLED_SDA, OLED_SCL);
+  startClock();
   // Probe first: display.begin alone does not reliably identify a missing panel.
   for (unsigned attempt = 0; attempt < 5 && !displayReady; ++attempt) {
     for (uint8_t address : {0x3C, 0x3D}) {
@@ -530,6 +568,7 @@ void setup() {
 #endif
   finger.begin(SENSOR_BAUD); delay(300);
   sensorReady = probeSensor();
+  detectTouchWire();
   if (USE_WIFI) {
     WiFi.persistent(false);  // credentials live in our own settings, not the SDK's flash copy
 #if defined(ESP8266)
@@ -574,6 +613,11 @@ void loop() {
   retrySensor();
   if (!sensorReady || !storageReady || millis() - lastScan < 150) { delay(5); return; }
   lastScan = millis();
+  if (!fingerTouched()) {  // touch wire says no finger: leave the sensor (and its light) idle
+    if (requireRemoval) screen("Ready");
+    requireRemoval = false; return;
+  }
+  if (requireRemoval && touchActive >= 0) return;  // finger still resting after a scan
   int image = finger.getImage();
   if (image == FINGERPRINT_NOFINGER) { if (requireRemoval) screen("Ready"); requireRemoval = false; return; }
   if (image != FINGERPRINT_OK || requireRemoval) return;

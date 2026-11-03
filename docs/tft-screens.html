@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TFT screen mockups</title>
+<style>
+  body{margin:0;background:#e9eef3;font-family:Arial,Helvetica,sans-serif;color:#172e43}
+  header{padding:26px 40px 6px}
+  h1{margin:0;font-size:26px}
+  header p{margin:6px 0 0;color:#4a6175;font-size:15px}
+  .grid{display:grid;grid-template-columns:repeat(4,320px);gap:28px 36px;padding:22px 40px 36px}
+  figure{margin:0}
+  .bezel{background:#16191d;border-radius:18px;padding:14px;box-shadow:0 8px 22px #0003}
+  svg{display:block;width:292px;height:365px;border-radius:4px}
+  figcaption{margin-top:10px;font-size:15px;font-weight:700}
+  figcaption span{display:block;font-weight:400;color:#4a6175;font-size:13px;margin-top:3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>1.8″ TFT screen designs (128 × 160, portrait)</h1>
+  <p>Mockups at the panel's real resolution, enlarged for viewing. Names, IDs and times are examples.</p>
+</header>
+<div class="grid" id="grid"></div>
+<script>
+const W = 128, H = 160;
+const C = {bg1:'#101c2e', bg2:'#08101b', text:'#f2f6fa', muted:'#8ea3b8', green:'#3ddc84', amber:'#f5a524', red:'#ff5a5f', blue:'#4aa8ff', purple:'#b18cff'};
+
+function wifi(on = true) {
+  const col = on ? C.text : C.muted;
+  return `<g transform="translate(113 4)" fill="none" stroke="${col}" stroke-width="1.3" stroke-linecap="round">
+    <path d="M0 3.5 A7 7 0 0 1 10 3.5"/><path d="M1.9 5.6 A4.4 4.4 0 0 1 8.1 5.6"/><circle cx="5" cy="8" r="0.9" fill="${col}" stroke="none"/>
+    ${on ? '' : `<path d="M0 0 L10 9" stroke="${C.red}"/>`}</g>`;
+}
+function status(date = 'Mon, 3 Nov', online = true, right = '') {
+  return `<text x="5" y="11" font-size="8" fill="${C.text}">${date}</text>${right}${wifi(online)}`;
+}
+function waves() {
+  return `<path d="M0 146 C30 136 52 150 80 142 S118 134 128 140 V160 H0Z" fill="#18304d" opacity=".9"/>
+          <path d="M0 152 C34 145 60 157 92 150 S122 146 128 149 V160 H0Z" fill="#203e63" opacity=".8"/>`;
+}
+function fingerprint(cx, cy, s, col) {
+  let d = '';
+  for (const r of [2.5, 5, 7.5, 10, 12.5]) {
+    d += `<path d="M${cx - r * s} ${cy + r * 0.55 * s} C${cx - r * s} ${cy - r * 1.25 * s} ${cx + r * s} ${cy - r * 1.25 * s} ${cx + r * s} ${cy + r * 0.25 * s}"/>`;
+  }
+  d += `<path d="M${cx} ${cy - 1 * s} V${cy + 6 * s}"/>`;
+  return `<g fill="none" stroke="${col}" stroke-width="${1.15 * s}" stroke-linecap="round">${d}</g>`;
+}
+function ring(cx, cy, r, col, inner) {
+  return `<circle cx="${cx}" cy="${cy}" r="${r + 3}" fill="${col}" opacity=".13"/>
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="1.6"/>${inner}`;
+}
+const check = (cx, cy, col) => `<path d="M${cx - 7} ${cy} l5 5 l10 -11" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+const cross = (cx, cy, col) => `<path d="M${cx - 6} ${cy - 6} l12 12 M${cx + 6} ${cy - 6} l-12 12" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
+const bang = (cx, cy, col) => `<path d="M${cx} ${cy - 8} v9" stroke="${col}" stroke-width="3" stroke-linecap="round"/><circle cx="${cx}" cy="${cy + 6}" r="1.8" fill="${col}"/>`;
+const info = (cx, cy, col) => `<circle cx="${cx}" cy="${cy - 7}" r="1.8" fill="${col}"/><path d="M${cx} ${cy - 2} v9" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
+const lock = (cx, cy, col) => `<rect x="${cx - 7}" y="${cy - 2}" width="14" height="11" rx="2" fill="${col}"/><path d="M${cx - 4.5} ${cy - 2} v-4 a4.5 4.5 0 0 1 9 0 v4" fill="none" stroke="${col}" stroke-width="2.2"/>`;
+const exitArrow = (cx, cy, col) => `<path d="M${cx - 3} ${cy - 8} h-5 v16 h5 M${cx - 2} ${cy} h11 M${cx + 5} ${cy - 4} l4 4 l-4 4" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
+const t = (x, y, size, text, col = C.text, extra = '') => `<text x="${x}" y="${y}" font-size="${size}" fill="${col}" text-anchor="middle" ${extra}>${text}</text>`;
+const pill = (cx, y, w, label, col) => `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="13" rx="6.5" fill="${col}" opacity=".18"/>
+          <text x="${cx}" y="${y + 9.5}" font-size="8" font-weight="700" fill="${col}" text-anchor="middle">${label}</text>`;
+function result({icon, col, title, name, id, line, badge, badgeCol}) {
+  return status() + ring(64, 38, 16, col, icon(64, 38, col)) +
+    t(64, 70, 12, title, col, 'font-weight="700"') +
+    t(64, 89, 12.5, name, C.text, 'font-weight="700"') +
+    t(64, 101, 7.5, id, C.muted) +
+    (line ? t(64, 119, 7.5, line, C.muted) : '') +
+    (badge ? pill(64, 127, Math.max(50, badge.length * 6 + 16), badge, badgeCol) : '');
+}
+
+const screens = [
+  ['Idle — ready', 'Light off until a finger touches (touch wire)',
+    status() + t(64, 52, 31, '09:00', C.text, 'font-weight="700" letter-spacing="-1"') +
+    ring(64, 92, 20, C.green, fingerprint(64, 93, 1.1, C.green)) + t(64, 131, 9, 'Place your finger') + waves()],
+  ['Punch IN', 'Shift-based IN, on time',
+    result({icon: check, col: C.green, title: 'IN · 09:02', name: 'Shabab', id: 'HVBL0000153', line: 'General 09:00 – 18:00', badge: 'ON TIME', badgeCol: C.green})],
+  ['Punch OUT', 'Shows hours worked today',
+    result({icon: exitArrow, col: C.blue, title: 'OUT · 18:04', name: 'Shabab', id: 'HVBL0000153', line: 'Worked today', badge: '9h 02m', badgeCol: C.blue})],
+  ['Late IN', 'Recorded, marked late',
+    result({icon: check, col: C.amber, title: 'IN · 09:17', name: 'Anjali Nair', id: 'HVBL0000154', line: 'General 09:00 – 18:00', badge: 'LATE 17 MIN', badgeCol: C.amber})],
+  ['Already IN', 'Second scan in the IN window — not recorded twice',
+    result({icon: info, col: C.blue, title: 'Already IN', name: 'Shabab', id: 'since 09:02', line: 'Scan again at OUT time', badge: '', badgeCol: C.blue})],
+  ['Not registered', 'Unknown fingerprint — nothing recorded',
+    status() + ring(64, 46, 18, C.red, cross(64, 46, C.red)) + t(64, 84, 12, 'Not registered', C.red, 'font-weight="700"') +
+    t(64, 102, 8, 'This finger is not enrolled.', C.muted) + t(64, 114, 8, 'Please contact the admin.', C.muted) + waves()],
+  ['Inactive', 'Deactivated in the admin panel — punch refused',
+    result({icon: lock, col: C.red, title: 'Inactive', name: 'Rahul K', id: 'HVBL0000149', line: 'Punch not recorded', badge: 'SEE ADMIN', badgeCol: C.red})],
+  ['Try again', 'Unclear image (dry, wet or moved finger)',
+    status() + ring(64, 46, 18, C.amber, bang(64, 46, C.amber)) + t(64, 84, 12, 'Try again', C.amber, 'font-weight="700"') +
+    t(64, 102, 8, 'Place the finger flat', C.muted) + t(64, 114, 8, 'and hold it still.', C.muted) + waves()],
+  ['Enroll — step 1', 'Started from the admin panel',
+    status('ENROLLMENT', true) + t(64, 31, 12, 'Anjali Nair', C.text, 'font-weight="700"') + t(64, 43, 7.5, 'HVBL0000154', C.muted) +
+    ring(64, 80, 20, C.purple, fingerprint(64, 81, 1.1, C.purple)) + t(64, 118, 9, 'Place your finger') +
+    `<circle cx="58" cy="132" r="3" fill="${C.purple}"/><circle cx="70" cy="132" r="3" fill="none" stroke="${C.purple}"/>` + t(64, 150, 7, 'Step 1 of 2 · button = cancel', C.muted)],
+  ['Enroll — step 2', 'Same finger again, same position',
+    status('ENROLLMENT', true) + t(64, 31, 12, 'Anjali Nair', C.text, 'font-weight="700"') + t(64, 43, 7.5, 'HVBL0000154', C.muted) +
+    ring(64, 80, 20, C.purple, fingerprint(64, 81, 1.1, C.purple)) + t(64, 116, 8.5, 'Lift, then place the', C.text) + t(64, 127, 8.5, 'same finger again') +
+    `<circle cx="58" cy="138" r="3" fill="${C.purple}"/><circle cx="70" cy="138" r="3" fill="${C.purple}"/>` + t(64, 154, 7, 'Step 2 of 2', C.muted)],
+  ['Enrolled', 'Saved on the sensor and linked on the server',
+    result({icon: check, col: C.green, title: 'Enrolled', name: 'Anjali Nair', id: 'HVBL0000154', line: 'Fingerprint slot 5', badge: 'READY TO PUNCH', badgeCol: C.green})],
+  ['Offline', 'No Wi-Fi: clock from DS3231, scans saved on the device',
+    status('Mon, 3 Nov', false) + t(64, 52, 31, '09:00', C.text, 'font-weight="700" letter-spacing="-1"') +
+    ring(64, 92, 20, C.green, fingerprint(64, 93, 1.1, C.green)) + t(64, 128, 9, 'Place your finger') +
+    `<rect x="10" y="138" width="108" height="15" rx="7.5" fill="${C.amber}" opacity=".18"/>` + t(64, 148.5, 7.5, 'OFFLINE · 12 SAVED', C.amber, 'font-weight="700"')],
+];
+
+const grid = document.getElementById('grid');
+for (const [title, sub, body] of screens) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = `<div class="bezel"><svg viewBox="0 0 ${W} ${H}" font-family="Arial, Helvetica, sans-serif">
+      <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.bg1}"/><stop offset="1" stop-color="${C.bg2}"/></linearGradient></defs>
+      <rect width="${W}" height="${H}" fill="url(#bg)"/>${body}</svg></div>
+      <figcaption>${title}<span>${sub}</span></figcaption>`;
+  grid.append(fig);
+}
+</script>
+</body>
+</html>
