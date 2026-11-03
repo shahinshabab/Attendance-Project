@@ -1,0 +1,20 @@
+# KiCad: local state, caches, locks and automatic backups
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.lck
+_autosave-*
+~*.kicad_sch
+~*.kicad_pcb
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.bak
+
+# EasyEDA / generic exports opened locally
+*.tmp
+
+# Generated fabrication output: rebuild from the design files for each order.
+# Attach the exact files sent to JLCPCB to a GitHub release instead of committing them.
+production/
+gerbers/
+*.zip
