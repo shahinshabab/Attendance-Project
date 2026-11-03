@@ -1,0 +1,12 @@
+.venv/
+.pio-home/
+firmware/.pio/
+firmware/include/config.h
+.env
+data/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+.render-profile/
+*.local.txt

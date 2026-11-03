@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Attendance Admin</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0c151e;--panel:#14212d;--panel-2:#1a2a38;--line:#273a4b;--text:#e3ecf4;--muted:#93a7ba;
+  --accent:#2bb39a;--accent-ink:#06231d;--in:#3ecf8e;--out:#f2b04f;--danger:#ef6b6b;--focus:#7cc4ff;
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--bg)
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);min-height:100vh}
+[hidden]{display:none!important}
+h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+h2{font-size:17px}
+p{margin:0}
+.muted{color:var(--muted)}
+button,input,select{font:inherit;color:inherit}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+button{border:0;border-radius:8px;padding:9px 14px;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer;white-space:nowrap}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+button.small{padding:5px 10px;font-size:13px}
+button.danger{background:transparent;color:var(--danger);border:1px solid #5a2f35}
+button:disabled{opacity:.55;cursor:default}
+label{display:grid;gap:5px;font-size:13px;color:var(--muted)}
+label.check{display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px}
+
+/* Login */
+#login-view{min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.login-card{width:min(380px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;display:grid;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:18px}
+.error{color:var(--danger);font-size:14px;min-height:20px}
+
+/* Shell */
+#app-view{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+.sidebar{background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
+.nav{display:grid;gap:4px}
+.nav button{background:transparent;color:var(--muted);text-align:left;font-weight:500;display:flex;align-items:center;gap:10px}
+.nav button[aria-current="page"]{background:var(--panel-2);color:var(--text)}
+.nav button:hover{color:var(--text)}
+.nav .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.6}
+.user{margin-top:auto;display:grid;gap:8px;font-size:14px}
+main{padding:22px 28px 40px;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.topbar h1{font-size:24px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.ok{color:var(--text)}.pill.ok::before{background:var(--in);box-shadow:0 0 0 3px #3ecf8e33}
+.pill.warn::before{background:var(--out)}.pill.bad::before{background:var(--danger)}
+#toast{position:fixed;right:18px;bottom:18px;max-width:min(420px,calc(100% - 36px));background:var(--panel-2);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px #0007;z-index:5}
+#toast.err{border-left-color:var(--danger)}
+
+/* Content */
+.page{display:grid;gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:14px;min-width:0}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:4px}
+.stat .value{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .label{color:var(--muted);font-size:13px}
+.grid-2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start}
+.form-row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.form-row label{flex:1 1 160px}
+.table-wrap{overflow-x:auto;margin:0 -4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #1f3040;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,.mono{font-variant-numeric:tabular-nums}
+.actions{display:flex;gap:6px;justify-content:flex-end}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.03em}
+.badge.in{background:#3ecf8e22;color:var(--in)}.badge.out{background:#f2b04f22;color:var(--out)}
+.badge.neutral{background:#93a7ba22;color:var(--muted)}.badge.bad{background:#ef6b6b22;color:var(--danger)}
+.empty{color:var(--muted);padding:14px 2px}
+.people{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.people li{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--panel-2);border-radius:10px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kv div{background:var(--panel-2);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.kv span{color:var(--muted);font-size:12px}
+details summary{cursor:pointer;color:var(--muted)}
+@keyframes arrive{from{background:#2bb39a40}to{background:transparent}}
+tr.new td{animation:arrive 2.5s ease-out}
+
+@media (max-width:900px){
+  #app-view{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
+  .sidebar{position:static;height:auto;min-width:0;flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 16px;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{display:flex;overflow-x:auto;gap:4px;order:3;width:100%;min-width:0}
+  .user{margin:0 0 0 auto;display:flex;align-items:center}
+  main{padding:16px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<section id="login-view" hidden>
+  <form class="login-card" id="login-form">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span>Office Attendance</div>
+    <div><h1 style="font-size:22px">Admin sign in</h1><p class="muted">Staff attendance, fingerprints and the scanner.</p></div>
+    <label>Username<input name="username" autocomplete="username" required autofocus></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <div class="error" id="login-error" role="alert"></div>
+    <button>Sign in</button>
+  </form>
+</section>
+
+<div id="app-view" hidden>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span>Attendance</div>
+    <nav class="nav" aria-label="Sections">
+      <button data-page="live"><span class="dot"></span>Live</button>
+      <button data-page="staff"><span class="dot"></span>Staff</button>
+      <button data-page="enroll"><span class="dot"></span>Enrollment</button>
+      <button data-page="scanner"><span class="dot"></span>Scanner &amp; Wi-Fi</button>
+      <button data-page="reports"><span class="dot"></span>Reports</button>
+      <button data-page="account"><span class="dot"></span>Account</button>
+    </nav>
+    <div class="user"><span class="muted">Signed in as <strong id="who" style="color:var(--text)"></strong></span><button class="ghost small" id="logout">Log out</button></div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <h1 id="page-title">Live</h1>
+      <div class="pills"><span class="pill" id="live-pill">Connecting…</span><span class="pill" id="scanner-pill">Scanner</span></div>
+    </header>
+
+    <section class="page" data-page="live">
+      <div class="stats">
+        <div class="stat"><span class="label">In office now</span><span class="value" id="stat-in">0</span></div>
+        <div class="stat"><span class="label">Scans today</span><span class="value" id="stat-scans">0</span></div>
+        <div class="stat"><span class="label">Staff with fingerprints</span><span class="value" id="stat-enrolled">0</span></div>
+        <div class="stat"><span class="label">Scanner</span><span class="value" id="stat-scanner" style="font-size:20px">—</span><span class="label" id="stat-seen"></span></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>Today's scans</h2><span class="muted" id="today-label"></span></div>
+          <div class="table-wrap"><table><thead><tr><th>Time</th><th>Staff</th><th>Action</th><th>Slot</th></tr></thead><tbody id="live-rows"></tbody></table></div>
+          <p class="empty" id="live-empty">No scans yet today. New scans appear here instantly.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>In office now</h2></div>
+          <ul class="people" id="present"></ul>
+          <p class="empty" id="present-empty">Nobody is checked in.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="staff" hidden>
+      <form class="card" id="staff-form">
+        <div class="card-head"><h2 id="staff-form-title">Add staff member</h2><p class="muted">Use Edit to rename or deactivate someone.</p></div>
+        <div class="form-row">
+          <label>Staff code<input name="code" placeholder="EMP002" required pattern="[A-Za-z0-9_-]+" maxlength="40"></label>
+          <label>Full name<input name="name" placeholder="Full name" required maxlength="100"></label>
+          <label class="check" style="flex:0 0 auto"><input name="active" type="checkbox" checked>Active</label>
+          <button>Save</button><button type="button" class="ghost" id="staff-reset">Clear</button>
+        </div>
+      </form>
+      <div class="card">
+        <div class="card-head"><h2>Staff</h2><span class="muted" id="staff-count"></span></div>
+        <div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Status</th><th>Fingerprints</th><th></th></tr></thead><tbody id="staff-rows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="enroll" hidden>
+      <form class="card" id="enroll-form">
+        <div class="card-head"><h2>Enroll a fingerprint</h2></div>
+        <p class="muted">Choose the staff member and send the request. Within about 10 seconds the scanner shows their name: place the finger, lift it, then place the same finger again. If the two scans don't match, the scanner asks again (up to 3 tries). The slot is assigned automatically.</p>
+        <div class="form-row">
+          <label>Staff member<select name="employee_code" id="enroll-staff" required></select></label>
+          <label>Scanner<select name="device_id" class="device-select"></select></label>
+          <button>Ask scanner to enroll</button>
+        </div>
+      </form>
+      <div class="card">
+        <div class="card-head"><h2>Enrollment requests</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Requested</th><th>Staff</th><th>Scanner / slot</th><th>Status</th><th>Detail</th><th></th></tr></thead><tbody id="job-rows"></tbody></table></div>
+        <details>
+          <summary>Manual slot assignment (only for fingers enrolled over USB)</summary>
+          <form class="form-row" id="binding-form" style="margin-top:12px">
+            <label>Scanner<select name="device_id" class="device-select"></select></label>
+            <label>Sensor slot<input name="template_id" type="number" min="1" max="1000" required></label>
+            <label>Staff code<input name="employee_code" required></label>
+            <button>Assign slot</button>
+          </form>
+        </details>
+      </div>
+    </section>
+
+    <section class="page" data-page="scanner" hidden>
+      <div id="device-cards" class="page"></div>
+      <form class="card" id="wifi-form">
+        <div class="card-head"><h2>Office Wi-Fi</h2></div>
+        <p class="muted">Sent to the scanner on its next check-in. If the scanner can't reach the office Wi-Fi, turn on the built-in fallback phone hotspot; it connects through that, picks up the Wi-Fi saved here and switches back. 2.4 GHz WPA/WPA2 only.</p>
+        <div class="form-row">
+          <label>Scanner<select name="device_id" class="device-select"></select></label>
+          <label>Wi-Fi name<input name="ssid" required maxlength="32" autocomplete="off"></label>
+          <label>Wi-Fi password<input name="password" type="password" maxlength="63" autocomplete="new-password"></label>
+          <button>Send to scanner</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="page" data-page="reports" hidden>
+      <div class="card">
+        <div class="form-row">
+          <label style="flex:0 1 200px">Date<input type="date" id="report-day"></label>
+          <button id="report-load">Show</button><button class="ghost" id="report-export">Export CSV</button>
+          <span class="muted" id="report-count"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Daily summary</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Staff</th><th>First IN</th><th>Last OUT</th><th>Scans</th></tr></thead><tbody id="summary-rows"></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>All scans</h2><p class="muted">"Received only" means the scanner had no clock; the time shown is when the server received it.</p></div>
+        <div class="table-wrap"><table><thead><tr><th>Office time</th><th>Staff</th><th>Action</th><th>Scanner / slot</th><th>Time source</th></tr></thead><tbody id="report-rows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="account" hidden>
+      <form class="card" id="account-form" style="max-width:560px">
+        <div class="card-head"><h2>Change login</h2></div>
+        <p class="muted">Use a long password: this panel is on the internet. Saving signs out every open session.</p>
+        <label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label>
+        <label>Username<input name="username" id="account-username" required minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]+" autocomplete="username"></label>
+        <label>New password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+        <label>Repeat new password<input name="confirm" type="password" minlength="6" required autocomplete="new-password"></label>
+        <div><button>Save login</button></div>
+      </form>
+    </section>
+  </main>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const state = {user: null, officeDate: '', skew: 0, staff: [], bindings: [], devices: [], jobs: [], today: [], seen: new Set(), live: null, page: 'live'};
+const TITLES = {live: 'Live', staff: 'Staff', enroll: 'Enrollment', scanner: 'Scanner & Wi-Fi', reports: 'Reports', account: 'Account'};
+const JOB_LABEL = {pending: 'Waiting for scanner', active: 'On scanner now', enrolled: 'Enrolled', failed: 'Failed', cancelled: 'Cancelled'};
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') node.className = v; else if (k === 'text') node.textContent = v;
+    else if (k.startsWith('on')) node[k] = v; else node.setAttribute(k, v);
+  }
+  for (const c of children) if (c !== null && c !== undefined) node.append(c);
+  return node;
+}
+let toastTimer;
+function toast(text, isError = false) {
+  const t = $('#toast'); t.textContent = text; t.className = isError ? 'err' : ''; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, isError ? 7000 : 4000);
+}
+async function api(path, {method = 'GET', body} = {}) {
+  const r = await fetch(path, {method, credentials: 'same-origin',
+    headers: body !== undefined ? {'Content-Type': 'application/json'} : {}, body: body !== undefined ? JSON.stringify(body) : undefined});
+  if (r.status === 401 && path !== '/api/login') { showLogin(); throw Error('Please sign in again'); }
+  if (!r.ok) {
+    let detail; try { detail = (await r.json()).detail; } catch {}
+    throw Error(typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(d => d.msg).join('; ') : `Request failed (${r.status})`);
+  }
+  return r;
+}
+const json = async (path, opts) => (await api(path, opts)).json();
+const clock = iso => iso ? iso.slice(11, 19) : '';
+const serverNow = () => Date.now() + state.skew;
+function ago(iso) {
+  if (!iso) return 'never';
+  const s = Math.max(0, Math.round((serverNow() - new Date(iso)) / 1000));
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : new Date(iso).toLocaleString();
+}
+const staffLabel = r => r.name ? `${r.name} (${r.employee_code})` : 'Unknown slot';
+const actionBadge = a => el('span', {class: 'badge ' + (a === 'IN' ? 'in' : 'out'), text: a});
+function options(select, items) {
+  const keep = select.value;
+  select.replaceChildren(...items.map(([v, label]) => el('option', {value: v, text: label})));
+  if (items.some(([v]) => v === keep)) select.value = keep;
+}
+
+// ---- Login / session ----
+function showLogin() {
+  if (state.live) { state.live.close(); state.live = null; }
+  $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').password.value = '';
+}
+$('#login-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target; $('#login-error').textContent = '';
+  try {
+    await api('/api/login', {method: 'POST', body: {username: f.username.value.trim(), password: f.password.value}});
+    f.password.value = ''; await start();
+  } catch (err) { $('#login-error').textContent = err.message; }
+};
+$('#logout').onclick = async () => { try { await api('/api/logout', {method: 'POST'}); } catch {} showLogin(); };
+
+async function start() {
+  const me = await json('/api/me');
+  state.user = me.username; state.officeDate = me.office_date; state.skew = new Date(me.server_time) - Date.now();
+  $('#who').textContent = me.username || 'API key'; $('#account-username').value = me.username || '';
+  $('#login-view').hidden = true; $('#app-view').hidden = false;
+  if (!$('#report-day').value) $('#report-day').value = me.office_date;
+  await Promise.all([loadStaff(), loadDevices(), loadJobs(), loadToday()]);
+  connectLive(me.last_seq);
+  show(location.hash.slice(1) in TITLES ? location.hash.slice(1) : state.page);
+}
+
+// ---- Navigation ----
+function show(page) {
+  state.page = page; history.replaceState(null, '', '#' + page);
+  $$('.page[data-page]').forEach(s => s.hidden = s.dataset.page !== page);
+  $$('.nav button').forEach(b => { if (b.dataset.page === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  $('#page-title').textContent = TITLES[page];
+  if (page === 'reports') loadReport();
+}
+$$('.nav button').forEach(b => b.onclick = () => show(b.dataset.page));
+
+// ---- Live attendance ----
+function connectLive(after) {
+  if (state.live) state.live.close();
+  const pill = $('#live-pill');
+  const source = new EventSource('/api/live?after=' + after);
+  state.live = source;
+  source.onopen = () => { pill.textContent = 'Live'; pill.className = 'pill ok'; };
+  source.addEventListener('attendance', e => addScan(JSON.parse(e.data), true));
+  source.addEventListener('status', e => onStatus(JSON.parse(e.data)));
+  source.addEventListener('logout', () => showLogin());
+  source.onerror = () => {
+    pill.textContent = 'Reconnecting…'; pill.className = 'pill warn';
+    if (source.readyState === EventSource.CLOSED) setTimeout(async () => {
+      try { const me = await json('/api/me'); if (state.live === source) connectLive(Math.max(me.last_seq, ...state.today.map(r => r.seq), 0)); } catch {}
+    }, 3000);
+  };
+}
+function addScan(row, fresh) {
+  if (state.seen.has(row.event_id)) return;
+  state.seen.add(row.event_id);
+  if (row.local_time.slice(0, 10) !== state.officeDate) return;
+  state.today.push(row); state.today.sort((a, b) => a.local_time.localeCompare(b.local_time) || a.seq - b.seq);
+  renderLive(fresh ? row.event_id : null);
+  if (fresh) toast(`${row.name || 'Unknown fingerprint'} — ${row.action} at ${clock(row.local_time)}`);
+}
+async function loadToday() {
+  const rows = await json('/api/attendance?' + new URLSearchParams({day: state.officeDate, limit: 10000}));
+  state.today = []; state.seen = new Set();
+  rows.reverse().forEach(r => addScan(r, false)); renderLive();
+}
+function renderLive(highlight) {
+  const body = $('#live-rows'); body.replaceChildren();
+  for (const r of [...state.today].reverse()) {
+    body.append(el('tr', {class: r.event_id === highlight ? 'new' : ''},
+      el('td', {class: 'mono', text: clock(r.local_time)}), el('td', {text: staffLabel(r)}),
+      el('td', {}, actionBadge(r.action)), el('td', {class: 'num', text: r.template_id})));
+  }
+  $('#live-empty').hidden = state.today.length > 0;
+  const last = new Map();
+  for (const r of state.today) if (r.employee_code) last.set(r.employee_code, r);
+  const present = [...last.values()].filter(r => r.action === 'IN');
+  $('#present').replaceChildren(...present.map(r => el('li', {}, el('span', {text: r.name || r.employee_code}), el('span', {class: 'muted mono', text: 'since ' + clock(r.local_time)}))));
+  $('#present-empty').hidden = present.length > 0;
+  $('#stat-in').textContent = present.length; $('#stat-scans').textContent = state.today.length;
+  $('#today-label').textContent = new Date(state.officeDate + 'T00:00').toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
+}
+async function onStatus(status) {
+  state.skew = new Date(status.server_time) - Date.now();
+  state.devices = status.devices; renderDevices();
+  if (status.office_date !== state.officeDate) { state.officeDate = status.office_date; await loadToday(); }
+  if (state.page === 'enroll' || state.jobs.some(j => j.status === 'pending' || j.status === 'active')) {
+    const before = state.jobs.filter(j => j.status === 'enrolled').length;
+    await loadJobs();
+    if (state.jobs.filter(j => j.status === 'enrolled').length !== before) await loadStaff();
+  }
+}
+
+// ---- Scanner ----
+const online = d => d.last_seen && serverNow() - new Date(d.last_seen) < 60000;
+async function loadDevices() { state.devices = await json('/api/devices'); renderDevices(); }
+function renderDevices() {
+  $$('.device-select').forEach(s => options(s, state.devices.map(d => [d.device_id, d.device_id])));
+  const any = state.devices[0];
+  const pill = $('#scanner-pill');
+  if (any) {
+    const up = online(any);
+    pill.textContent = `${any.device_id}: ${up ? 'online' : 'offline'}`; pill.className = 'pill ' + (up ? 'ok' : 'bad');
+    $('#stat-scanner').textContent = up ? 'Online' : 'Offline'; $('#stat-seen').textContent = 'Last check-in ' + ago(any.last_seen);
+  }
+  $('#device-cards').replaceChildren(...state.devices.map(d => {
+    const r = d.report || {}, w = d.wifi;
+    const wifi = w ? `${w.ssid} · ${r.wifi_version === w.version ? 'applied' : 'waiting for scanner'}` : 'not set';
+    const items = [
+      ['Status', online(d) ? 'Online' : 'Offline'], ['Last check-in', ago(d.last_seen)],
+      ['Network', r.network ? `${r.network === 'office' ? 'Office Wi-Fi' : 'Fallback hotspot'} · ${r.ssid}` : '—'],
+      ['Signal', r.rssi ? `${r.rssi} dBm ${r.rssi > -67 ? '(good)' : r.rssi > -75 ? '(fair)' : '(weak)'}` : '—'],
+      ['Office Wi-Fi', wifi + (r.office_error ? ` · last error: ${r.office_error}` : '')],
+      ['Fingerprint sensor', d.report ? (r.sensor ? `OK · ${r.templates}/${r.capacity} stored` : 'NOT DETECTED') : '—'],
+      ['Waiting to send', d.report ? String(r.pending) : '—'], ['Mode', r.mode || '—'],
+      ['Clock', d.report ? (r.clock_ok ? 'Set' : 'Not set') : '—'], ['Firmware', r.firmware || '—']];
+    return el('div', {class: 'card'}, el('div', {class: 'card-head'}, el('h2', {text: d.device_id}),
+      el('span', {class: 'badge ' + (online(d) ? 'in' : 'bad'), text: online(d) ? 'ONLINE' : 'OFFLINE'})),
+      el('div', {class: 'kv'}, ...items.map(([k, v]) => el('div', {}, el('span', {text: k}), el('strong', {text: v})))));
+  }));
+}
+setInterval(() => { if (!$('#app-view').hidden) renderDevices(); }, 5000);
+$('#wifi-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  try {
+    await api(`/api/devices/${encodeURIComponent(f.device_id.value)}/wifi`, {method: 'PUT', body: {ssid: f.ssid.value, password: f.password.value}});
+    f.password.value = ''; await loadDevices(); toast('Wi-Fi saved. The scanner switches on its next check-in.');
+  } catch (err) { toast(err.message, true); }
+};
+
+// ---- Staff ----
+async function loadStaff() {
+  [state.staff, state.bindings] = await Promise.all([json('/api/employees'), json('/api/bindings')]);
+  const counts = {};
+  state.bindings.forEach(b => counts[b.employee_code] = (counts[b.employee_code] || 0) + 1);
+  $('#staff-rows').replaceChildren(...state.staff.map(s => el('tr', {},
+    el('td', {class: 'mono', text: s.code}), el('td', {text: s.name}),
+    el('td', {}, el('span', {class: 'badge ' + (s.active ? 'in' : 'neutral'), text: s.active ? 'ACTIVE' : 'INACTIVE'})),
+    el('td', {class: 'num', text: counts[s.code] || 0}),
+    el('td', {}, el('div', {class: 'actions'},
+      el('button', {class: 'ghost small', text: 'Edit', onclick: () => editStaff(s)}),
+      s.active ? el('button', {class: 'small', text: 'Enroll', onclick: () => { show('enroll'); $('#enroll-staff').value = s.code; }}) : null)))));
+  $('#staff-count').textContent = `${state.staff.filter(s => s.active).length} active`;
+  $('#stat-enrolled').textContent = state.staff.filter(s => s.active && counts[s.code]).length;
+  options($('#enroll-staff'), state.staff.filter(s => s.active).map(s => [s.code, `${s.name} (${s.code})`]));
+}
+function editStaff(s) {
+  const f = $('#staff-form'); f.code.value = s.code; f.name.value = s.name; f.active.checked = !!s.active; f.code.readOnly = true;
+  $('#staff-form-title').textContent = 'Edit ' + s.code; f.name.focus();
+}
+$('#staff-reset').onclick = () => { const f = $('#staff-form'); f.reset(); f.code.readOnly = false; $('#staff-form-title').textContent = 'Add staff member'; };
+$('#staff-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  try {
+    await api('/api/employees', {method: 'POST', body: {code: f.code.value.trim(), name: f.name.value.trim(), active: f.active.checked}});
+    toast(`Saved ${f.name.value.trim()}.`); $('#staff-reset').click(); await loadStaff();
+  } catch (err) { toast(err.message, true); }
+};
+
+// ---- Enrollment ----
+async function loadJobs() {
+  state.jobs = await json('/api/enrollments');
+  $('#job-rows').replaceChildren(...state.jobs.map(j => el('tr', {},
+    el('td', {class: 'mono', text: new Date(j.created_at).toLocaleString()}), el('td', {text: `${j.name ?? ''} (${j.employee_code})`}),
+    el('td', {text: `${j.device_id} / ${j.template_id}`}),
+    el('td', {}, el('span', {class: 'badge ' + ({enrolled: 'in', failed: 'bad', cancelled: 'neutral'}[j.status] || 'out'), text: JOB_LABEL[j.status] || j.status})),
+    el('td', {class: 'muted', text: j.message}),
+    el('td', {}, ['pending', 'active'].includes(j.status) ? el('button', {class: 'danger small', text: 'Cancel', onclick: async () => {
+      try { await api(`/api/enrollments/${j.id}/cancel`, {method: 'POST', body: {}}); await loadJobs(); } catch (err) { toast(err.message, true); }
+    }}) : null))));
+}
+$('#enroll-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  try {
+    const j = await json('/api/enrollments', {method: 'POST', body: {device_id: f.device_id.value, employee_code: f.employee_code.value}});
+    await loadJobs(); toast(`Enrollment requested for ${j.name} (slot ${j.template_id}). Ask them to go to the scanner.`);
+  } catch (err) { toast(err.message, true); }
+};
+$('#binding-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  try {
+    await api('/api/bindings', {method: 'POST', body: {device_id: f.device_id.value, template_id: Number(f.template_id.value), employee_code: f.employee_code.value.trim()}});
+    f.reset(); await loadStaff(); toast('Slot assigned.');
+  } catch (err) { toast(err.message, true); }
+};
+
+// ---- Reports ----
+async function loadReport() {
+  const day = $('#report-day').value;
+  try {
+    const rows = await json('/api/attendance?' + new URLSearchParams({day, limit: 10000}));
+    $('#report-count').textContent = `${rows.length} scans`;
+    $('#report-rows').replaceChildren(...rows.map(r => el('tr', {},
+      el('td', {class: 'mono', text: r.local_time.replace('T', ' ').slice(0, 19)}), el('td', {text: staffLabel(r) + (r.name && !r.active ? ' · inactive' : '')}),
+      el('td', {}, actionBadge(r.action)), el('td', {text: `${r.device_id} / ${r.template_id}`}),
+      el('td', {class: 'muted', text: r.time_source === 'device' ? 'Scanner clock' : 'Received only'}))));
+    const people = new Map();
+    for (const r of [...rows].reverse()) {
+      const key = r.employee_code || 'slot ' + r.template_id;
+      const p = people.get(key) || {label: staffLabel(r), firstIn: '', lastOut: '', count: 0};
+      p.count++; if (r.action === 'IN' && !p.firstIn) p.firstIn = clock(r.local_time); if (r.action === 'OUT') p.lastOut = clock(r.local_time);
+      people.set(key, p);
+    }
+    $('#summary-rows').replaceChildren(...[...people.values()].map(p => el('tr', {},
+      el('td', {text: p.label}), el('td', {class: 'mono', text: p.firstIn || '—'}), el('td', {class: 'mono', text: p.lastOut || '—'}), el('td', {class: 'num', text: p.count}))));
+  } catch (err) { toast(err.message, true); }
+}
+$('#report-load').onclick = loadReport;
+$('#report-day').onchange = loadReport;
+$('#report-export').onclick = async () => {
+  try {
+    const day = $('#report-day').value;
+    const blob = await (await api('/api/export.csv?' + new URLSearchParams(day ? {day} : {}))).blob();
+    const a = el('a', {href: URL.createObjectURL(blob), download: `attendance-${day || 'all'}.csv`}); a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch (err) { toast(err.message, true); }
+};
+
+// ---- Account ----
+$('#account-form').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  if (f.password.value !== f.confirm.value) return toast('The new passwords do not match.', true);
+  try {
+    await api('/api/admin/credentials', {method: 'PUT', body: {username: f.username.value.trim(), password: f.password.value, current_password: f.current_password.value}});
+    f.reset(); toast('Login changed. Please sign in with the new details.'); showLogin();
+  } catch (err) { toast(err.message, true); }
+};
+
+start().catch(() => showLogin());
+</script>
+</body>
+</html>

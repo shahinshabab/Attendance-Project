@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1040" viewBox="0 0 1680 1040" role="img" aria-labelledby="title desc">
+<title id="title">ESP32 DevKit fingerprint attendance wiring</title>
+<desc id="desc">Current wiring for the 30-pin ESP32 DevKit: USB phone charger power, OLED on 3V3, GND, D21 and D22, R307 on VIN, GND, RX2 and TX2, optional button on D25, Wi-Fi to the attendance server. Left: functional wiring. Right: where each pin is on the printed board.</desc>
+<defs>
+<style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
+.title{font-size:28px;font-weight:700}.sub{font-size:16px;fill:#4a6175}
+.head{font-size:19px;font-weight:700}.body{font-size:15px}.small{font-size:13px;fill:#4a6175}
+.pin{font-size:16px;font-family:Consolas,Menlo,monospace}.pinw{font-size:16px;font-family:Consolas,Menlo,monospace;fill:#e8f0f6}
+.loc{font-size:13px;font-family:Consolas,Menlo,monospace;fill:#cfdbe5}.locused{font-size:13px;font-family:Consolas,Menlo,monospace;fill:#ffffff;font-weight:700}
+.call{font-size:14px;font-weight:700}.nc{font-size:15px;font-family:Consolas,Menlo,monospace;fill:#8a99a8}
+.box{fill:#fff;stroke:#8ca4b8;stroke-width:2}.board{fill:#1d2733}
+.wire{fill:none;stroke-width:3.5;stroke-linecap:round}
+.red{stroke:#c83b48}.orange{stroke:#d9822b}.black{stroke:#364554}.blue{stroke:#207cba}.green{stroke:#18806a}.purple{stroke:#8058a0}.grey{stroke:#9aa7b3}
+.cred{fill:#c83b48}.corange{fill:#d9822b}.cblack{fill:#5b6b7b}.cblue{fill:#207cba}.cgreen{fill:#18806a}.cpurple{fill:#8058a0}.cidle{fill:#6f7c89}
+</style>
+<marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="none" stroke="#8058a0" stroke-width="1.6"/></marker>
+</defs>
+<rect width="1680" height="1040" fill="#edf3f7"/>
+<text x="40" y="50" class="title">Office fingerprint attendance · wiring (ESP32 DevKit, 30-pin)</text>
+<text x="40" y="80" class="sub">Left: what connects to what. Right: where those pins are on your board. Always match the printed labels, not wire colours or positions.</text>
+
+<!-- ===== Functional wiring ===== -->
+<rect x="40" y="130" width="270" height="120" rx="12" class="box"/>
+<text x="60" y="164" class="head">5 V USB phone charger</text>
+<text x="60" y="191" class="body">1 A or more · micro-USB cable</text>
+<text x="60" y="216" class="small">Powers the board, and the R307</text>
+<text x="60" y="234" class="small">through the VIN pin</text>
+<path d="M310 190H380" class="wire red"/><text x="318" y="180" class="small">USB 5 V</text>
+
+<rect x="40" y="300" width="270" height="150" rx="12" class="box"/>
+<text x="60" y="334" class="head">Attendance server</text>
+<text x="60" y="360" class="body">attendance.shahinanalytics.com</text>
+<text x="60" y="385" class="small">HTTPS · scans sent instantly</text>
+<text x="60" y="405" class="small">Office Wi-Fi (set in admin panel), or</text>
+<text x="60" y="425" class="small">fallback phone hotspot</text>
+<path d="M380 375H314" class="wire purple" stroke-dasharray="8 6" marker-end="url(#arrow)"/><text x="322" y="358" class="small">Wi-Fi</text>
+
+<rect x="40" y="600" width="270" height="130" rx="12" class="box"/>
+<text x="60" y="634" class="head">IN / OUT button</text>
+<text x="60" y="660" class="body">Optional · normally open</text>
+<text x="60" y="684" class="small">Press to switch IN/OUT;</text>
+<text x="60" y="702" class="small">also cancels an enrollment</text>
+<path d="M310 640H380" class="wire purple"/><path d="M310 680H380" class="wire black"/>
+
+<rect x="380" y="120" width="260" height="660" rx="16" class="board"/>
+<text x="400" y="156" style="font-size:19px;font-weight:700;fill:#ffffff">ESP32 DevKit</text>
+<text x="400" y="178" style="font-size:13px;fill:#b9c7d3">ESP-WROOM-32 · CP2102 USB</text>
+<text x="400" y="196" class="pinw">micro-USB</text>
+<text x="400" y="380" class="pinw">(Wi-Fi)</text>
+<text x="400" y="646" class="pinw">D25</text>
+<text x="400" y="686" class="pinw">GND</text>
+<text x="620" y="246" class="pinw" text-anchor="end">3V3</text>
+<text x="620" y="286" class="pinw" text-anchor="end">GND</text>
+<text x="620" y="326" class="pinw" text-anchor="end">D21</text>
+<text x="620" y="366" class="pinw" text-anchor="end">D22</text>
+<text x="620" y="506" class="pinw" text-anchor="end">VIN</text>
+<text x="620" y="546" class="pinw" text-anchor="end">GND</text>
+<text x="620" y="586" class="pinw" text-anchor="end">RX2</text>
+<text x="620" y="626" class="pinw" text-anchor="end">TX2</text>
+<text x="620" y="222" style="font-size:12px;fill:#8fa3b5" text-anchor="end">TO OLED</text>
+<text x="620" y="482" style="font-size:12px;fill:#8fa3b5" text-anchor="end">TO R307</text>
+
+<rect x="760" y="160" width="250" height="230" rx="12" class="box"/>
+<text x="780" y="192" class="head">OLED 0.96″ 128×64</text>
+<text x="780" y="214" class="small">4-pin I²C · address 0x3C · 3.3 V</text>
+<text x="780" y="246" class="pin">VCC</text><text x="780" y="286" class="pin">GND</text><text x="780" y="326" class="pin">SDA</text><text x="780" y="366" class="pin">SCL</text>
+<path d="M640 240H760" class="wire orange"/><text x="668" y="232" class="small">3.3 V</text>
+<path d="M640 280H760" class="wire black"/>
+<path d="M640 320H760" class="wire green"/>
+<path d="M640 360H760" class="wire blue"/>
+
+<rect x="760" y="420" width="250" height="320" rx="12" class="box"/>
+<text x="780" y="452" class="head">R307 fingerprint sensor</text>
+<text x="780" y="474" class="small">UART 57600 · cable colours vary</text>
+<text x="780" y="506" class="pin">VCC</text><text x="780" y="546" class="pin">GND</text>
+<text x="780" y="586" class="pin">TX</text><text x="822" y="586" class="small">sensor sends</text>
+<text x="780" y="626" class="pin">RX</text><text x="822" y="626" class="small">sensor receives</text>
+<text x="780" y="672" class="nc">Touch   — not connected</text>
+<text x="780" y="704" class="nc">3.3V-T  — not connected</text>
+<path d="M640 500H760" class="wire red"/><text x="668" y="492" class="small">5 V</text>
+<path d="M640 540H760" class="wire black"/>
+<path d="M640 580H760" class="wire blue"/>
+<path d="M640 620H760" class="wire green"/>
+
+<!-- ===== Pin locator ===== -->
+<text x="1080" y="150" class="head">Where the pins are on your board</text>
+<text x="1080" y="174" class="small">Top view, USB connector at the bottom, labels as printed on the board</text>
+<rect x="1250" y="195" width="240" height="630" rx="16" class="board"/>
+<rect x="1290" y="210" width="160" height="150" rx="6" fill="#b8c1ca"/>
+<rect x="1290" y="210" width="160" height="32" rx="6" fill="#8f9aa5"/>
+<text x="1370" y="300" text-anchor="middle" style="font-size:20px;font-weight:700;fill:#26323d">ESP-32</text>
+<text x="1370" y="322" text-anchor="middle" style="font-size:12px;fill:#26323d">module</text>
+<rect x="1345" y="815" width="50" height="22" rx="4" fill="#9aa5b0"/><text x="1404" y="845" class="small">micro-USB</text>
+<rect x="1272" y="792" width="16" height="16" rx="3" fill="#56636f"/><text x="1294" y="805" style="font-size:11px;fill:#cfdbe5">EN</text>
+<rect x="1452" y="792" width="16" height="16" rx="3" fill="#56636f"/><text x="1446" y="805" text-anchor="end" style="font-size:11px;fill:#cfdbe5">BOOT</text>
+
+<!-- left header, top to bottom: EN VP VN D34 D35 D32 D33 D25 D26 D27 D14 D12 D13 GND VIN (y = 385 + 27*i) -->
+<g>
+<circle cx="1268" cy="385" r="5" class="cidle"/><text x="1282" y="390" class="loc">EN</text>
+<circle cx="1268" cy="412" r="5" class="cidle"/><text x="1282" y="417" class="loc">VP</text>
+<circle cx="1268" cy="439" r="5" class="cidle"/><text x="1282" y="444" class="loc">VN</text>
+<circle cx="1268" cy="466" r="5" class="cidle"/><text x="1282" y="471" class="loc">D34</text>
+<circle cx="1268" cy="493" r="5" class="cidle"/><text x="1282" y="498" class="loc">D35</text>
+<circle cx="1268" cy="520" r="5" class="cidle"/><text x="1282" y="525" class="loc">D32</text>
+<circle cx="1268" cy="547" r="5" class="cidle"/><text x="1282" y="552" class="loc">D33</text>
+<circle cx="1268" cy="574" r="7.5" class="cpurple"/><text x="1282" y="579" class="locused">D25</text>
+<circle cx="1268" cy="601" r="5" class="cidle"/><text x="1282" y="606" class="loc">D26</text>
+<circle cx="1268" cy="628" r="5" class="cidle"/><text x="1282" y="633" class="loc">D27</text>
+<circle cx="1268" cy="655" r="5" class="cidle"/><text x="1282" y="660" class="loc">D14</text>
+<circle cx="1268" cy="682" r="5" class="cidle"/><text x="1282" y="687" class="loc">D12</text>
+<circle cx="1268" cy="709" r="5" class="cidle"/><text x="1282" y="714" class="loc">D13</text>
+<circle cx="1268" cy="736" r="7.5" class="cblack" stroke="#ffffff" stroke-width="1.5"/><text x="1282" y="741" class="locused">GND</text>
+<circle cx="1268" cy="763" r="7.5" class="cred"/><text x="1282" y="768" class="locused">VIN</text>
+</g>
+<!-- right header, top to bottom: D23 D22 TX0 RX0 D21 D19 D18 D5 TX2 RX2 D4 D2 D15 GND 3V3 -->
+<g>
+<circle cx="1472" cy="385" r="5" class="cidle"/><text x="1458" y="390" class="loc" text-anchor="end">D23</text>
+<circle cx="1472" cy="412" r="7.5" class="cblue"/><text x="1458" y="417" class="locused" text-anchor="end">D22</text>
+<circle cx="1472" cy="439" r="5" class="cidle"/><text x="1458" y="444" class="loc" text-anchor="end">TX0</text>
+<circle cx="1472" cy="466" r="5" class="cidle"/><text x="1458" y="471" class="loc" text-anchor="end">RX0</text>
+<circle cx="1472" cy="493" r="7.5" class="cgreen"/><text x="1458" y="498" class="locused" text-anchor="end">D21</text>
+<circle cx="1472" cy="520" r="5" class="cidle"/><text x="1458" y="525" class="loc" text-anchor="end">D19</text>
+<circle cx="1472" cy="547" r="5" class="cidle"/><text x="1458" y="552" class="loc" text-anchor="end">D18</text>
+<circle cx="1472" cy="574" r="5" class="cidle"/><text x="1458" y="579" class="loc" text-anchor="end">D5</text>
+<circle cx="1472" cy="601" r="7.5" class="cgreen"/><text x="1458" y="606" class="locused" text-anchor="end">TX2</text>
+<circle cx="1472" cy="628" r="7.5" class="cblue"/><text x="1458" y="633" class="locused" text-anchor="end">RX2</text>
+<circle cx="1472" cy="655" r="5" class="cidle"/><text x="1458" y="660" class="loc" text-anchor="end">D4</text>
+<circle cx="1472" cy="682" r="5" class="cidle"/><text x="1458" y="687" class="loc" text-anchor="end">D2</text>
+<circle cx="1472" cy="709" r="5" class="cidle"/><text x="1458" y="714" class="loc" text-anchor="end">D15</text>
+<circle cx="1472" cy="736" r="7.5" class="cblack" stroke="#ffffff" stroke-width="1.5"/><text x="1458" y="741" class="locused" text-anchor="end">GND</text>
+<circle cx="1472" cy="763" r="7.5" class="corange"/><text x="1458" y="768" class="locused" text-anchor="end">3V3</text>
+</g>
+<!-- callouts -->
+<path d="M1240 574H1258" class="wire purple"/><text x="1234" y="579" class="call" text-anchor="end" style="fill:#8058a0">IN/OUT button</text>
+<path d="M1240 736H1258" class="wire black"/><text x="1234" y="741" class="call" text-anchor="end">R307 GND + button GND</text>
+<path d="M1240 763H1258" class="wire red"/><text x="1234" y="768" class="call" text-anchor="end" style="fill:#c83b48">R307 VCC (5 V)</text>
+<path d="M1482 412H1500" class="wire blue"/><text x="1506" y="417" class="call" style="fill:#207cba">OLED SCL</text>
+<path d="M1482 493H1500" class="wire green"/><text x="1506" y="498" class="call" style="fill:#18806a">OLED SDA</text>
+<path d="M1482 601H1500" class="wire green"/><text x="1506" y="606" class="call" style="fill:#18806a">to R307 RX</text>
+<path d="M1482 628H1500" class="wire blue"/><text x="1506" y="633" class="call" style="fill:#207cba">from R307 TX</text>
+<path d="M1482 736H1500" class="wire black"/><text x="1506" y="741" class="call">OLED GND</text>
+<path d="M1482 763H1500" class="wire orange"/><text x="1506" y="768" class="call" style="fill:#d9822b">OLED VCC</text>
+
+<!-- ===== Notes ===== -->
+<rect x="40" y="860" width="520" height="160" rx="12" fill="#fff5df" stroke="#c18a2e" stroke-width="2"/>
+<text x="60" y="892" class="head">Power: check before plugging in</text>
+<text x="60" y="920" class="body">• Power from a 5 V USB phone charger (1 A or more).</text>
+<text x="60" y="944" class="body">• Don't use the HW-131 / MB102 breadboard supply (overheats).</text>
+<text x="60" y="968" class="body">• Buck converter: set 5.0 V and check + polarity with a meter.</text>
+<text x="60" y="992" class="body">• Never 5 V on 3V3. Never PC USB and external 5 V together.</text>
+
+<rect x="580" y="860" width="520" height="160" rx="12" class="box"/>
+<text x="600" y="892" class="head">Signals</text>
+<text x="600" y="920" class="body">• R307 TX → RX2 (GPIO16) · R307 RX ← TX2 (GPIO17).</text>
+<text x="600" y="944" class="body">• Sensor not detected? Swap the two R307 data wires.</text>
+<text x="600" y="968" class="body">• OLED pin order varies by maker: match its printed labels.</text>
+<text x="600" y="992" class="body">• Join every ground: charger, ESP32, R307, OLED, button.</text>
+
+<rect x="1120" y="860" width="520" height="160" rx="12" class="box"/>
+<text x="1140" y="892" class="head">Network</text>
+<text x="1140" y="920" class="body">• Office Wi-Fi: admin panel → Scanner &amp; Wi-Fi.</text>
+<text x="1140" y="944" class="body">• Fallback hotspot: see WIFI-CREDENTIALS.local.txt.</text>
+<text x="1140" y="968" class="body">• 2.4 GHz only. Keep near the router (now about −77 dBm).</text>
+<text x="1140" y="992" class="body">• Offline scans are saved on the board and sent later.</text>
+</svg>
