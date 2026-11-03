@@ -10,9 +10,9 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | --- | --- | --- | --- | --- | ---: | ---: | --- |
 | MCU | U1 | ESP32-WROOM-32E-N4 (4 MB) | C701341 | Extended | 60,757 | 3.77 | Current module, chip rev 3 (Secure Boot V2 capable); same footprint as WROOM-32 |
 | Clock | U2 | DS3231MZ+TRL (SOIC-8, ±5 ppm) | C107410 | Extended | 10,325 | 3.35 | In KiCad's library; the SOIC-16 DS3231SN costs $9–11 for ±2 ppm the server corrects anyway |
-| Clock | BT1 | CR2032-BS-6-1 coin-cell holder | C70377 | Extended | 17,373 | 0.14 | |
+| Clock | BT1 | Keystone 3034 CR2032 holder | C5213768 | Extended | 776 | 0.39 | Replaces CR2032-BS-6-1 (C70377), which has no EasyEDA footprint data; KiCad has the exact Keystone 3034 footprint |
 | 5 V buck | U3 | XL1509-5.0E1 (40 V in, 2 A, fixed 5 V) | C61063 | **Basic** | 426,392 | 0.25 | No feedback divider; Basic part |
-| 5 V buck | L1 | FNR8040S470MT 47 µH, 8 × 8 mm | C168137 | Extended | 22,885 | 0.13 | Check saturation current ≥ 1.5 A against the datasheet in the schematic stage |
+| 5 V buck | L1 | FNR8040S680MT 68 µH, 8 × 8 mm | C168140 | Extended | 4,472 | 0.12 | 68 µH per the XL1509 datasheet's 12 V → 5 V example; check saturation current ≥ 1.5 A before ordering |
 | 5 V buck | D1 | SS34 Schottky (catch diode) | C8678 | **Basic** | 3,180,122 | 0.04 | |
 | 3.3 V | U4 | AMS1117-3.3 (1 A, SOT-223) | C6186 | **Basic** | 1,720,437 | 0.21 | |
 | Input | Q1 | AO3401A P-MOSFET (reverse polarity) | C15127 | **Basic** | 1,677,808 | 0.10 | |
@@ -32,7 +32,8 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | Battery | J3 | JST-PH 2.0 2-pin SMD (+ 2 solder pads) | C722761 | Extended | 43,845 | 0.04 | |
 | Program | Q4, Q5 | MMBT3904 NPN (auto-program) | C20526 | **Basic** | 2,851,963 | 0.01 | |
 | Feedback | Q6 | MMBT3904 NPN (buzzer driver) | C20526 | **Basic** | — | — | Same part |
-| Feedback | BZ1 | MLT-8530 SMD buzzer 8.5 × 8.5 mm | C94599 | Extended | 141,271 | 0.20 | |
+| Feedback | BZ1 | MLT-8530 SMD buzzer 8.5 × 8.5 mm | C94599 | Extended | 141,271 | 0.20 | Pads 1 (+) and 4 (−) per datasheet; pads 2/3 are dummies |
+| Feedback | D6 | 1N4148W flyback diode (buzzer) | C81598 | **Basic** | 3,836,332 | 0.01 | |
 | Feedback | LED1 | Red 0805 (error, charging) | C84256 | **Basic** | 2,370,309 | 0.01 | |
 | Feedback | LED2 | Green 0805 (OK, power) | C84260 | Extended | 494,742 | 0.02 | |
 | Buttons | SW1, SW2 | TS-1187A tactile switch (RESET, BOOT) | C318884 | **Basic** | 1,044,364 | 0.02 | |
@@ -63,7 +64,8 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | 2.4 kΩ | 0603 | C22940 | TP4056 charge current (500 mA) |
 | 2 kΩ | 0603 | C22975 | Spare / LED current tuning |
 | 470 Ω | 0603 | C23179 | Programming-header series resistors |
-| 30 kΩ | 0603 | *(look up in schematic stage)* | Boost feedback lower resistor |
+| 30 kΩ | 0603 | C22984 | Boost feedback lower resistor (220 k / 30 k = 4.96 V) |
+| 100 Ω | 0603 | C22775 | DW01A supply resistor |
 
 ## Cost estimate (per order)
 
@@ -80,6 +82,7 @@ Ways to cut cost later:
 
 ## Still to verify in the schematic stage
 
-- Inductor saturation currents (L1 ≥ 1.5 A, L2 ≥ 3 A) and the XL1509 inductor value at 150 kHz, against datasheets.
-- Footprints for the barrel jack, USB-C, MX1.25 and CR2032 holder taken from JLCPCB/LCSC (EasyEDA) data, so the pick-and-place rotations are right.
-- The 30 kΩ Basic resistor code.
+- Inductor saturation currents (L1 ≥ 1.5 A, L2 ≥ 3 A) against their datasheets.
+- Pick-and-place rotations in JLCPCB's assembly preview (EasyEDA-derived footprints are usually right; KiCad standard ones sometimes need an offset).
+
+Checked during the schematic stage (2026-11-03), against datasheets: XL1509 (ON/OFF low = on, internal 5 V divider), TPS61023 (pinout, VREF 0.595 V), LM66100 (pinout, active-low CE), DC-005 2.0 (pin 4 = centre +, pin 2 = sleeve), TS-1187A (A-B and C-D joined), MLT-8530 (+/− pads), TP4056, DW01A, FS8205A, USB-C 6P.

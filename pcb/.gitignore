@@ -18,3 +18,10 @@ _autosave-*
 production/
 gerbers/
 *.zip
+
+# Generated check outputs
+attendance-board/erc.json
+attendance-board/bom-check.csv
+
+# 3D models of the LCSC parts (27 MB): regenerate with easyeda2kicad --full (see README section 7)
+libraries/attendance.3dshapes/

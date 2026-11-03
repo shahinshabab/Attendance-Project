@@ -2,7 +2,16 @@
 
 This folder will hold the custom main board for the office fingerprint attendance scanner. The aim is one PCB that JLCPCB manufactures **and assembles**. You plug the fingerprint sensor, display and button into it, mount it in the enclosure, and it runs the existing firmware with no pin changes.
 
-**Status:** specification only. No schematic or layout files exist yet. Everything below is what the board must do; part numbers marked *(verify)* must be checked against the JLCPCB/LCSC parts library, with stock, before ordering.
+**Status (2026-11-03):**
+
+| Stage | State |
+| --- | --- |
+| 1. Parts | Done: [parts.md](parts.md) |
+| 2. Schematic | Done: [attendance-board/attendance-board-schematic.pdf](attendance-board/attendance-board-schematic.pdf), ERC 0 errors / 0 warnings, 114 components, 68 nets |
+| 3. Layout | Not started |
+| 4. JLCPCB files | Not started |
+
+The schematic is generated from [generator/design.py](generator/design.py) (see §7). Part numbers marked *(verify)* below are from the original spec; the selected parts are in parts.md.
 
 ## 1. What the board replaces
 
@@ -237,6 +246,21 @@ Choose final LCSC part numbers in the design tool, preferring **Basic** parts, a
 ## 7. Files to produce for JLCPCB
 
 Recommended tool: **KiCad 8 or newer**. Its files are plain text, so changes can be reviewed in git. The **"Fabrication Toolkit"** plugin exports JLCPCB-ready files. EasyEDA Pro is the alternative if you prefer JLCPCB's own editor with its built-in parts library.
+
+### Regenerating the schematic
+
+The circuit lives in `generator/design.py` as data: one entry per component, with symbol, footprint, LCSC part and pin → net map. Edit that file, never the generated schematic. Using KiCad's bundled Python:
+
+```powershell
+$k = "$env:LOCALAPPDATA\Programs\KiCad\10.0\bin"
+cd pcb\generator
+& "$k\python.exe" gen_schematic.py           # writes attendance-board/*.kicad_sch and library tables
+cd ..\attendance-board
+& "$k\kicad-cli.exe" sch erc --severity-all attendance-board.kicad_sch
+& "$k\kicad-cli.exe" sch export pdf --output attendance-board-schematic.pdf attendance-board.kicad_sch
+```
+
+New LCSC parts: `easyeda2kicad --full --lcsc_id=C123456 --output pcb/libraries/attendance`, then `generator/fix_library.py` and `kicad-cli sym upgrade` / `fp upgrade` on the library. Check the new part's pinout against its datasheet before using it.
 
 Planned layout of this folder:
 
