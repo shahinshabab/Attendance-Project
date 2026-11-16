@@ -125,13 +125,27 @@ ScreenStatus screenStatus() {
   s.clock = clockText(); s.date = dateText(); s.online = !USE_WIFI || netUp; s.serverOk = serverOk; s.pending = pending.size();
   return s;
 }
-// Active buzzer: a pattern is alternating on/off times in ms. Blocking but short (at most 0.4 s).
+// Buzzer: a pattern is alternating on/off times in ms. Blocking but short (at most 0.4 s).
+// The main board's MLT-8530 is a passive transducer, so the ESP32 plays a square-wave tone.
+// An active buzzer (the prototype's TMB12A05) also sounds with the tone. BUZZER_TONE_HZ 0 = plain on/off.
+#ifndef BUZZER_TONE_HZ
+#define BUZZER_TONE_HZ 2700
+#endif
+#if !defined(ESP8266)
+constexpr uint8_t BUZZER_LEDC_CHANNEL = 4;
+#endif
 bool buzzerOn = true;
+void buzzerSet(bool on) {
+#if !defined(ESP8266)
+  if (BUZZER_TONE_HZ > 0) { ledcWriteTone(BUZZER_LEDC_CHANNEL, on ? BUZZER_TONE_HZ : 0); return; }
+#endif
+  digitalWrite(BUZZER_PIN, on ? HIGH : LOW);
+}
 void beep(std::initializer_list<uint16_t> pattern) {
   if (BUZZER_PIN < 0 || !buzzerOn) return;
   bool on = true;
-  for (uint16_t ms : pattern) { digitalWrite(BUZZER_PIN, on ? HIGH : LOW); delay(ms); on = !on; }
-  digitalWrite(BUZZER_PIN, LOW);
+  for (uint16_t ms : pattern) { buzzerSet(on); delay(ms); on = !on; }
+  buzzerSet(false);
 }
 void beepFor(View view) {
   switch (view) {
@@ -625,7 +639,12 @@ void setup() {
   settings.begin("attendance", false);
   if (settings.isKey("wifi_ssid")) { officeSsid = settings.getString("wifi_ssid", ""); officePass = settings.getString("wifi_pass", ""); }
   wifiVersion = settings.getUInt("wifi_ver", 0); resultId = settings.getInt("res_id", 0);
-  if (BUZZER_PIN >= 0) { pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW); }
+  if (BUZZER_PIN >= 0) {
+    pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
+#if !defined(ESP8266)
+    if (BUZZER_TONE_HZ > 0) { ledcSetup(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ, 8); ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CHANNEL); ledcWriteTone(BUZZER_LEDC_CHANNEL, 0); }
+#endif
+  }
   buzzerOn = settings.getUInt("buzzer", 1) != 0;
   Wire.begin(OLED_SDA, OLED_SCL);
   startClock();
