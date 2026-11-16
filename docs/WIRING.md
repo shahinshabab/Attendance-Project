@@ -4,6 +4,28 @@ Your board has an ESP-WROOM-32 module mounted on a larger PCB with a USB connect
 
 Open [wiring.svg](wiring.svg) in a browser for the complete labelled diagram. The drawing is a functional connection diagram, not a physical pin-order drawing.
 
+## Firmware variants
+
+One code base, one PlatformIO environment per hardware combination. Pins and the display live in
+`firmware/include/board.h`; `config.h` only holds the device identity and network secrets. A DevKit and a
+bare ESP-WROOM-32 use the same build: only the display and the main-PCB extras differ.
+
+| Variant (`device.ps1 -Variant`) | Hardware |
+| --- | --- |
+| `esp32dev` (default) = `esp32-st7735` | ESP32 DevKit / ESP-WROOM-32 + 1.8" ST7735 (wiring below) |
+| `esp32-ili9488` | Same wiring with the 3.5" ILI9488 SPI module (320x480 portrait). Module pins 1-8: VCC, GND, CS IO5, RESET IO19, DC IO4, SDI/MOSI IO23, SCK IO18, LED (backlight). SDO and the touch pins stay unconnected |
+| `board-ili9488` | Main PCB (ESP32-WROOM-32E) with the 3.5" ILI9488 on J5, plus status LEDs (green IO33, red IO13), backlight switch IO14 (LOW = on), case switch IO26, DS3231 INT IO35, battery IO34, external 5 V IO36, charger IO39; the last five appear in `STATUS` |
+| `nodemcu` | Temporary NodeMCU ESP8266 with the 128x64 OLED (section at the end) |
+
+```powershell
+scripts\device.ps1 build -Variant esp32-ili9488
+scripts\device.ps1 upload -Variant esp32-ili9488 -Port COM3
+```
+
+`STATUS` reports `hardware=` and the panel size. On the ILI9488, `TFTROT 2` turns the picture 180 degrees and
+`TFTTAB 1` inverts the colours for IPS panels. A `config.h` from before these variants still contains pins and will not
+compile: regenerate it once with `.venv\Scripts\python.exe -m tools.firmware_config` (keeps the hotspot password; the device key comes from `.env`).
+
 ## Connection table (current setup)
 
 Board: 30-pin ESP32 DevKit (ESP-WROOM-32, CP2102), labels as printed on the board. [wiring.png](wiring.png) shows both the connections and where each pin sits on the board.

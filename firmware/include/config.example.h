@@ -1,4 +1,6 @@
 #pragma once
+// Identity and network only; pins and display come from board.h (chosen by the PlatformIO environment).
+#define CONFIG_H_VERSION 2
 // Generate the real config.h with: .venv\Scripts\python.exe -m tools.firmware_config
 // true: the ESP32 talks to the server over Wi-Fi. false: USB bridge through this computer.
 constexpr bool USE_WIFI = true;
@@ -13,37 +15,5 @@ constexpr char DEVICE_API_KEY[] = ""; // device key from .env; never the admin k
 // PROGMEM keeps it in flash on the ESP8266 (no effect on ESP32).
 constexpr char ROOT_CA[] PROGMEM = R"PEM(
 )PEM";
-#if defined(ESP8266)
-// NodeMCU ESP8266: GPIO numbers, NodeMCU label in brackets. Sensor uses software serial.
-constexpr int SENSOR_RX = 14; // [D5] ESP RX <- R307 TX
-constexpr int SENSOR_TX = 12; // [D6] ESP TX -> R307 RX
-constexpr int OLED_SDA = 4;   // [D2]
-constexpr int OLED_SCL = 5;   // [D1]
-constexpr int FINGER_TOUCH_PIN = -1; // no spare pin: poll the sensor
-constexpr uint8_t TFT_ROTATION = 0, TFT_TAB = 0; // unused: this build drives the OLED
-constexpr int BUZZER_PIN = -1; // no spare pin
-constexpr unsigned MAX_PENDING_EVENTS = 150; // limited RAM
-#else
-constexpr int SENSOR_RX = 16; // ESP RX <- R307 TX
-constexpr int SENSOR_TX = 17; // ESP TX -> R307 RX
-constexpr int OLED_SDA = 21;  // I2C bus: OLED (0x3C) and DS3231 clock (0x68)
-constexpr int OLED_SCL = 22;
-// R307 "Touch" (finger-detect) output. The sensor is only read while a finger touches it, so its
-// light stays off when idle. Polarity is detected at boot; if the wire is absent the firmware polls.
-constexpr int FINGER_TOUCH_PIN = 27;
-// 1.8" ST7735 TFT on the hardware SPI bus (SCK = D18, SDA/MOSI = D23 are fixed by the bus).
-constexpr int TFT_CS = 5;
-constexpr int TFT_DC = 4;   // labelled A0 or DC on the module
-constexpr int TFT_RST = 19;
-// Portrait: 0 or 2 (180 degrees). ST7735 variant: 0 green tab, 1 red tab, 2 black tab. Both can be
-// changed over USB without rebuilding (TFTROT n / TFTTAB n) if the picture is upside down, shifted or off-colour.
-constexpr uint8_t TFT_ROTATION = 0;
-constexpr uint8_t TFT_TAB = 2;
-// Active buzzer (TMB12A05, 5 V) switched by an NPN transistor: HIGH = sound. -1 = no buzzer.
-// Same pin as the custom PCB. USB: BEEP tests it, BUZZER 0 / BUZZER 1 mutes or unmutes (saved).
-constexpr int BUZZER_PIN = 32;
-constexpr unsigned MAX_PENDING_EVENTS = 500;
-#endif
-constexpr unsigned long SENSOR_BAUD = 57600;
 // On-screen clock only (scans are stored in UTC): India Standard Time = UTC+5:30.
 constexpr long DISPLAY_UTC_OFFSET = 19800;

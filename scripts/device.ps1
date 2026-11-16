@@ -3,7 +3,9 @@ param(
     [string]$Port,
     [int]$Slot = 0,
     [string]$Server = 'http://127.0.0.1:8765',
-    [ValidateSet('esp32','nodemcu')][string]$Board = 'esp32'
+    [ValidateSet('esp32','nodemcu')][string]$Board = 'esp32',
+    # Firmware variant (PlatformIO environment); overrides -Board. See firmware/include/board.h.
+    [Alias('Env')][ValidateSet('','esp32dev','esp32-st7735','esp32-ili9488','board-ili9488','nodemcu')][string]$Variant = ''
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -13,7 +15,8 @@ $buildRoot = & $pythonPath -m tools.shortpath $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the build directory' }
 $firmwarePath = Join-Path $buildRoot 'firmware'
 $env:PLATFORMIO_CORE_DIR = Join-Path $buildRoot '.pio-home'
-$pioEnv = @{ esp32 = 'esp32dev'; nodemcu = 'nodemcu' }[$Board]
+$pioEnv = if ($Variant) { $Variant } else { @{ esp32 = 'esp32dev'; nodemcu = 'nodemcu' }[$Board] }
+if ($Action -in @('build','upload','init-storage')) { Write-Host "Firmware variant: $pioEnv" }
 switch ($Action) {
     'list' { & $pythonPath -m serial.tools.list_ports -v }
     'build' { & $pythonPath -m platformio run -d $firmwarePath -e $pioEnv }

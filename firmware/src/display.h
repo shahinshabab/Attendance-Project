@@ -1,6 +1,6 @@
 #pragma once
-// Scanner display: 1.8" ST7735 TFT on the ESP32 (designs in docs/tft-screens.png),
-// the 128x64 I2C OLED on the ESP8266 build.
+// Scanner display: 1.8" ST7735 (128x160) or 3.5" ILI9488 (320x480) TFT on the ESP32, one layout scaled
+// to the panel (designs in docs/tft-screens.png); the 128x64 I2C OLED on the ESP8266 build.
 #include <Arduino.h>
 
 enum class View : uint8_t { Idle, Ok, Info, Warn, Error, Enroll };
