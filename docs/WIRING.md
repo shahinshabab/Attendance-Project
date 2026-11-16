@@ -12,7 +12,7 @@ Board: 30-pin ESP32 DevKit (ESP-WROOM-32, CP2102), labels as printed on the boar
 | --- | --- | --- |
 | 5 V USB phone charger | micro-USB port | 1 A or more. Powers the board, and the R307 through VIN |
 | R307 VCC | **VIN** (bottom left) | 5 V while the board is USB-powered |
-| R307 GND | **GND** (left, next to VIN) | Shared with the button |
+| R307 GND | **GND** (left, next to VIN) | |
 | R307 TX | **RX2** (GPIO16) | Sensor sends → board receives |
 | R307 RX | **TX2** (GPIO17) | Board sends → sensor receives. Not detected? Swap TX/RX |
 | R307 Touch | **D27** | Finger-detect output: the sensor (and its light) is only used while a finger touches it |
@@ -28,9 +28,26 @@ Board: 30-pin ESP32 DevKit (ESP-WROOM-32, CP2102), labels as printed on the boar
 | DS3231 GND | **GND** | |
 | DS3231 SDA | **D21** | I²C data (shared bus; address 0x68) |
 | DS3231 SCL | **D22** | I²C clock |
-| IN/OUT button (optional) | **D25** and **GND** | Normally open; manual IN/OUT when no shift is set; cancels an enrollment |
+| Buzzer driver input | **D32** | Through a 1 kΩ resistor to the S8050 base (see below) |
+| Buzzer driver supply | **VIN** and **GND** | 5 V for the buzzer, shared with the R307 |
 
-3V3 feeds four wires and GND several: join them on a small rail or terminal block. The firmware detects the touch wire at boot; without it, it keeps polling the sensor (the light blinks). The DS3231 sets the clock at boot, so offline scans after a power cut keep their real time. The TFT display code follows the approved [screen designs](tft-screens.png); until then the old OLED can stay on D21/D22 alongside the DS3231.
+3V3 feeds four wires and GND several: join them on a small rail or terminal block. The firmware detects the touch wire at boot; without it, it keeps polling the sensor (the light blinks). If the screen says "Place your finger" but the sensor never lights up, the touch wire is held at one level: check that 3.3V-T has 3.3 V and that the Touch wire is on the R307's touch pin, or send `TOUCH 0` over USB to poll instead. The DS3231 sets the clock at boot, so offline scans after a power cut keep their real time. The ESP32 firmware drives the TFT (screens as in [tft-screens.png](tft-screens.png)); the OLED is no longer used on the ESP32. If the picture is upside down, shifted, or has wrong colours or a noisy edge, fix it over USB without rebuilding: `TFTROT 2` turns it 180°, and `TFTTAB 0`, `1` or `2` selects the ST7735 variant (green, red or black tab; black is the default). Both settings are saved on the board.
+
+### Buzzer (TMB12A05)
+
+The TMB12A05 is an active 5 V magnetic buzzer (it beeps by itself when powered, about 30 mA). That is more current than a GPIO should supply and needs 5 V, so a small NPN transistor switches it:
+
+| Part | Connect |
+| --- | --- |
+| Buzzer **+** (longer leg, “+” on top) | **VIN** (5 V) |
+| Buzzer **−** | S8050 **collector** |
+| S8050 **emitter** | **GND** |
+| S8050 **base** | 1 kΩ resistor → **D32**; and 10 kΩ resistor → **GND** (keeps it silent while the board boots) |
+| 1N4148 diode | Across the buzzer: **stripe (cathode) to 5 V**, other end to the collector. Absorbs the coil's voltage spike |
+
+S8050 pins, flat face toward you, legs down: **E B C** (left to right). A 2N2222A/PN2222A in a plastic TO-92 package has the same E B C order; BC547 is C B E, so check your part's pinout. If you have a three-pin buzzer *module* (VCC, I/O, GND) instead of the bare buzzer, it already contains the transistor: VCC → VIN, GND → GND, I/O → D32 directly.
+
+Sounds: one short beep = verified (also enrolled, already scanned); three quick beeps = try again; one long beep = not registered or an error. During enrollment a tick means a capture was taken. Over USB, `BEEP` plays all three, and `BUZZER 0` / `BUZZER 1` mutes or unmutes it (saved on the board).
 
 Power rules learned on this project:
 
@@ -73,6 +90,5 @@ Used until the replacement ESP32 arrives. Same firmware source (`device.ps1 ... 
 | OLED **GND** | **G** | |
 | OLED **SDA** | **D2** (GPIO4) | |
 | OLED **SCL** | **D1** (GPIO5) | |
-| Optional IN/OUT button | **D7** (GPIO13) and **G** | Also cancels an enrollment |
 
 Leave D3, D4, D8, RX and TX unconnected (boot and USB pins). Do not connect the buck converter and the computer USB at the same time; unplug the buck output before uploading firmware. Limitations versus the ESP32: the sensor uses software serial, HTTPS waits for NTP time, and the offline queue holds 150 scans.

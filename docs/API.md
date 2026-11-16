@@ -69,13 +69,17 @@ Baud rate: 115200, newline-delimited UTF-8. Sensor UART is separate and defaults
 ```text
 STATUS
 TIME 1793158200
-IN
-OUT
+TFTROT 2
+TFTTAB 2
+BEEP
+BUZZER 0
+SENSORSCAN
+TOUCH 0
 ENROLL 1
 DELETE 1
 ACK a1b2c3d40000111122223333
 ```
 
-`TIME` is Unix seconds in UTC; the example is illustrative. The bridge sends the current computer time automatically. `ENROLL` and `DELETE` operate on the physical sensor only. Enrollment does not update the server assignment.
+`TIME` is Unix seconds in UTC; the example is illustrative. The bridge sends the current computer time automatically. On the ESP32, `TIME` also sets the DS3231 when it has no valid time or is more than 2 seconds off. `SENSORSCAN` tries the R307 on GPIO16/17 in both directions at 9600–115200 baud and reports which combination answers; STATUS shows `touch_now`, the live level of the touch wire. `TOUCH 0` ignores a faulty touch wire and polls the sensor (its light blinks while idle); `TOUCH 1` uses the wire again. Both are saved on the board. `ENROLL` and `DELETE` operate on the physical sensor only. Enrollment does not update the server assignment.
 
 In USB mode the device repeats a packet such as `{"type":"attendance","event":{...}}` until the bridge receives server acceptance and sends `ACK <event_id>`. Status lines use `{"type":"status","message":"..."}`. ACK only removes the current queue head if its ID matches exactly. Wi-Fi mode uses the same event object over HTTPS and ignores serial ACK commands.

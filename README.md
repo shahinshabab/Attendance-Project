@@ -1,6 +1,6 @@
 # Office fingerprint attendance
 
-This folder is the project workspace for an **ESP32 development board (ESP-WROOM-32), R307 UART fingerprint sensor, and 128 × 64 four-pin I²C OLED**. Open `Attendance.code-workspace` in VS Code or open this folder directly.
+This folder is the project workspace for an **ESP32 development board (ESP-WROOM-32), R307 UART fingerprint sensor, and 1.8″ ST7735 SPI TFT display**, with a DS3231 clock. Open `Attendance.code-workspace` in VS Code or open this folder directly.
 
 The ESP32 is the implemented board. A standard Raspberry Pi Pico has no built-in Wi-Fi and needs different firmware; the supplied ESP32 firmware must not be flashed to a Pico. Pico W is a separate Wi-Fi-capable alternative, also requiring a port.
 
@@ -42,21 +42,14 @@ The USB connection on COM3 was verified and attendance firmware was uploaded aft
    .\scripts\device.ps1 enroll -Port COM3 -Slot 1
    ```
 
-   Follow the OLED/terminal prompts: place finger, remove, place the same finger again. Enrollment takes place on the sensor; it does not create a server staff record. Assign device `office-01`, slot `1`, to `EMP001` in the dashboard. Remove the finger before starting attendance. Verify that a second enrollment into an occupied slot is refused on your particular sensor before enrolling the office.
+   Follow the display/terminal prompts: place finger, remove, place the same finger again. Enrollment takes place on the sensor; it does not create a server staff record. Assign device `office-01`, slot `1`, to `EMP001` in the dashboard. Remove the finger before starting attendance. Verify that a second enrollment into an occupied slot is refused on your particular sensor before enrolling the office.
 6. Start the USB bridge:
 
    ```powershell
    .\scripts\device.ps1 bridge -Port COM3
    ```
 
-   Scan, then click Refresh in the dashboard. The OLED's **Saved on device** means the scan is queued in flash; the terminal's **Saved** means the server accepted it. Staff must select IN or OUT before scanning. The optional button toggles the mode and the OLED shows it. With the bridge stopped you can also run:
-
-   ```powershell
-   .\scripts\device.ps1 out -Port COM3
-   .\scripts\device.ps1 bridge -Port COM3
-   ```
-
-   Mode survives resets. Run `device.ps1 in` or use the button to switch back. There is no automatic IN/OUT alternation, which could produce wrong records after a missed scan.
+   Scan, then click Refresh in the dashboard. The display's **Verified** means the finger matched and the scan is saved on the device; the terminal's **Saved** means the server accepted it. There is no IN/OUT button: the server decides IN or OUT from each person's scans that day (see [operations](docs/OPERATIONS.md)).
 
 ## Connection modes
 

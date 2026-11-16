@@ -32,7 +32,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', required=True)
     parser.add_argument('--server', default='http://127.0.0.1:8765')
-    parser.add_argument('command', choices=['bridge', 'enroll', 'delete', 'status', 'in', 'out'])
+    parser.add_argument('command', choices=['bridge', 'enroll', 'delete', 'status'])
     parser.add_argument('--slot', type=int)
     args = parser.parse_args()
     if args.command in ('enroll', 'delete') and (args.slot is None or not 1 <= args.slot <= 1000):

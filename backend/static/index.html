@@ -280,7 +280,7 @@ function ago(iso) {
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : new Date(iso).toLocaleString();
 }
 const staffLabel = r => r.name ? `${r.name} (${r.employee_code})` : 'Unknown slot';
-const actionBadge = a => el('span', {class: 'badge ' + (a === 'IN' ? 'in' : 'out'), text: a});
+const actionBadge = a => el('span', {class: 'badge ' + ({IN: 'in', OUT: 'out'}[a] || 'neutral'), text: a});
 function options(select, items) {
   const keep = select.value;
   select.replaceChildren(...items.map(([v, label]) => el('option', {value: v, text: label})));

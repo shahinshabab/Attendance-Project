@@ -3,7 +3,7 @@
 ## What is implemented
 
 - R307 two-scan enrollment, matching, protected deletion, and capacity query via USB.
-- Four-pin OLED status and IN/OUT mode; optional GPIO25 push button. Mode is persisted in ESP32 preferences.
+- 1.8" TFT display (ESP32): date, clock, Wi-Fi state, result screens and enrollment steps, as in docs/tft-screens.png. The NodeMCU build still uses the four-pin OLED. A matched finger shows **Verified** with one short beep (TMB12A05 buzzer on D32; long beep for errors). There is no IN/OUT button; the server decides IN/OUT.
 - USB attendance forwarding or standalone Wi-Fi HTTPS delivery.
 - Two Wi-Fi networks in Wi-Fi mode: the office network sent from the dashboard (first priority, saved in the ESP32's flash) and a fallback phone hotspot compiled into the firmware (`FALLBACK_WIFI_SSID`/`PASSWORD` in `config.h`).
 - Server-requested enrollment: the dashboard asks the scanner to enroll a staff member; the slot is chosen by the server and bound automatically on success.
@@ -20,7 +20,7 @@
 
 **Inactive staff:** deactivation marks the staff record inactive in reports; it does not erase their fingerprint or reject scans. Explicitly delete their sensor template through USB after draining the queue. Attendance is evidence collection rather than a door-access control decision.
 
-**IN / OUT:** staff choose the mode before scanning. This is a shared terminal mode, visible on OLED and preserved through resets. The starter records scans; it does not derive hours, late marks, shifts, or payroll automatically. Missing and duplicated human scans still require review. The dashboard displays up to 500 records per request by default, with an API maximum of 10,000; CSV is limited to the most recent 100,000 matching records. Reports beyond that need pagination before use at that scale.
+**IN / OUT:** decided by the server, not the scanner. For each employee and office day, scans are ordered by scan time (not arrival time, so scans queued offline still sort correctly): the 1st is IN, the 2nd OUT, the 3rd IN, and so on. A missed scan therefore flips the rest of that day until corrected; shift-based rules are planned. Scans from an unassigned sensor slot show as SCAN. Older records that were sent with an explicit IN/OUT keep it. The starter records scans; it does not derive hours, late marks, shifts, or payroll automatically. Missing and duplicated human scans still require review. The dashboard displays up to 500 records per request by default, with an API maximum of 10,000; CSV is limited to the most recent 100,000 matching records. Reports beyond that need pagination before use at that scale.
 
 **USB trust:** enrollment/deletion/time/acknowledgment commands use physical USB access without additional authentication. Keep the installed scanner enclosure and USB port under office control. Never expose its serial port over an unauthenticated network tunnel. Device API keys authenticate the sender; they do not prove a live finger was present against someone with firmware/physical access.
 
@@ -28,12 +28,12 @@
 
 **Wi-Fi recovery:** the scanner tries the saved office Wi-Fi for 20 seconds, then the fallback hotspot for 20 seconds, and repeats. While on the hotspot it retries the office network every 5 minutes. When the office password or network changes: turn on a phone hotspot with the fallback name/password (2.4 GHz, the phone needs internet), wait for the dashboard to show the scanner on "Fallback hotspot", enter the new office Wi-Fi under Scanner & Wi-Fi, and the scanner saves it and switches within about 10 seconds. Then turn the hotspot off. The dashboard shows the last office failure reason (`network not found`, `wrong password or rejected`). Scans are queued on the device throughout and sent once it is online. Entering a new password while the old one still works makes the scanner switch immediately, so update it once the router has changed. The office password is stored unencrypted in the server database and in the ESP32's flash, and is never returned by the admin API. Enterprise (802.1X) and captive-portal networks are not supported.
 
-**Server enrollment:** one enrollment at a time per scanner. The scanner shows the staff name and waits 2 minutes for the first placement and 60 seconds for the second. Pressing the IN/OUT button during enrollment cancels it. Scanning is paused during an enrollment. A failed attempt leaves its slot unused forever; just request again.
+**Server enrollment:** one enrollment at a time per scanner. The scanner shows the staff name and waits 2 minutes for the first placement and 60 seconds for the second. Cancel a waiting enrollment from the admin panel. Scanning is paused during an enrollment. A failed attempt leaves its slot unused forever; just request again.
 
 ## Hardware acceptance sequence
 
 1. Check power rails and UART levels, then connect USB and identify the actual non-Bluetooth COM port.
-2. Build/upload firmware and provision event storage once. Confirm sensor readiness, OLED display, and `pending=0` using STATUS.
+2. Build/upload firmware and provision event storage once. Confirm sensor readiness, the display (`display=tft ...`), and `pending=0` using STATUS.
 3. Enroll a test finger, check occupied-slot refusal, map it to a test employee, scan IN, select OUT, wait ten seconds and scan OUT.
 4. Confirm both server rows and exported local times. Test an unknown finger produces no attendance.
 5. Stop the server, capture several scans, power-cycle the board, restart the server/bridge and confirm queued events arrive once. Events captured after reboot without clock sync must show `received_only`.

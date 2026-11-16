@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1240" viewBox="0 0 1720 1240" role="img" aria-labelledby="title desc">
-<title id="title">ESP32 DevKit fingerprint attendance wiring with TFT, DS3231 and R307 touch wire</title>
-<desc id="desc">30-pin ESP32 DevKit powered by a USB phone charger. 1.8 inch ST7735 TFT on SPI: SCK D18, SDA D23, A0 D4, RESET D19, CS D5, VCC and LED on 3V3. DS3231 clock on I2C D21 and D22 at 3.3 V. R307 on VIN, GND, RX2 and TX2, its touch output on D27 and touch power on 3V3. Optional button on D25. Left: functional wiring. Right: pin positions on the printed board.</desc>
+<title id="title">ESP32 DevKit fingerprint attendance wiring with TFT, DS3231, R307 touch wire and buzzer</title>
+<desc id="desc">30-pin ESP32 DevKit powered by a USB phone charger. 1.8 inch ST7735 TFT on SPI: SCK D18, SDA D23, A0 D4, RESET D19, CS D5, VCC and LED on 3V3. DS3231 clock on I2C D21 and D22 at 3.3 V. R307 on VIN, GND, RX2 and TX2, its touch output on D27 and touch power on 3V3. TMB12A05 active buzzer on 5 V switched by an S8050 NPN transistor: D32 through 1 kilohm to the base, 10 kilohm base to GND, 1N4148 diode across the buzzer. Left: functional wiring. Right: pin positions on the printed board.</desc>
 <defs>
 <style>
 text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
@@ -12,14 +12,15 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 .box{fill:#fff;stroke:#8ca4b8;stroke-width:2}.board{fill:#1d2733}
 .wire{fill:none;stroke-width:3.5;stroke-linecap:round}
 .red{stroke:#c83b48}.orange{stroke:#d9822b}.black{stroke:#364554}.blue{stroke:#207cba}.green{stroke:#18806a}.purple{stroke:#8058a0}
-.brown{stroke:#8a6d4b}.pink{stroke:#c0508a}.yellow{stroke:#d4a017}
+.teal{stroke:#1597a6}.brown{stroke:#8a6d4b}.pink{stroke:#c0508a}.yellow{stroke:#d4a017}
 .cred{fill:#c83b48}.corange{fill:#d9822b}.cblack{fill:#5b6b7b}.cblue{fill:#207cba}.cgreen{fill:#18806a}.cpurple{fill:#8058a0}
-.cbrown{fill:#8a6d4b}.cpink{fill:#c0508a}.cyellow{fill:#d4a017}.cidle{fill:#6f7c89}
+.cbrown{fill:#8a6d4b}.cpink{fill:#c0508a}.cyellow{fill:#d4a017}.cidle{fill:#6f7c89}.cteal{fill:#1597a6}
+.ckt{fill:none;stroke:#172e43;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 </style>
 <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="none" stroke="#8058a0" stroke-width="1.6"/></marker>
 </defs>
 <rect width="1720" height="1240" fill="#edf3f7"/>
-<text x="40" y="50" class="title">Office fingerprint attendance · wiring (ESP32 DevKit, 1.8″ TFT, DS3231, R307 touch)</text>
+<text x="40" y="50" class="title">Office fingerprint attendance · wiring (ESP32 DevKit, 1.8″ TFT, DS3231, R307 touch, buzzer)</text>
 <text x="40" y="80" class="sub">Left: what connects to what. Right: where those pins are on your board. Always match the printed labels, not wire colours or positions.</text>
 
 <!-- ===== Left-side parts ===== -->
@@ -39,11 +40,33 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 <path d="M380 375H314" class="wire purple" stroke-dasharray="8 6" marker-end="url(#arrow)"/><text x="322" y="358" class="small">Wi-Fi</text>
 
 <rect x="40" y="600" width="270" height="130" rx="12" class="box"/>
-<text x="60" y="634" class="head">IN / OUT button</text>
-<text x="60" y="660" class="body">Optional · normally open</text>
-<text x="60" y="684" class="small">Manual IN/OUT when no shift is set;</text>
-<text x="60" y="702" class="small">also cancels an enrollment</text>
-<path d="M310 640H380" class="wire purple"/><path d="M310 680H380" class="wire black"/>
+<text x="60" y="634" class="head">IN / OUT</text>
+<text x="60" y="660" class="body">No button: the server decides</text>
+<text x="60" y="684" class="small">1st scan of the day = IN, 2nd = OUT,</text>
+<text x="60" y="702" class="small">in scan-time order. Display: "Verified"</text>
+
+<!-- ===== Buzzer driver ===== -->
+<rect x="40" y="760" width="270" height="250" rx="12" class="box"/>
+<text x="60" y="790" class="head">Buzzer TMB12A05</text>
+<text x="60" y="810" class="small">active 5 V buzzer · NPN switch</text>
+<path d="M310 845H80" class="ckt"/>
+<path d="M80 845V868M72 868H88M80 884V905" class="ckt"/><path d="M72 884H88L80 868Z" fill="#172e43"/>
+<text x="50" y="924" class="small">1N4148</text>
+<path d="M150 845V858M150 890V922M80 905H150" class="ckt"/>
+<circle cx="150" cy="874" r="16" fill="#ffffff" class="ckt"/><text x="150" y="879" text-anchor="middle" style="font-size:12px;font-weight:700">BZ</text>
+<text x="157" y="857" style="font-size:13px;font-weight:700">+</text><text x="172" y="879" class="small">TMB12A05</text>
+<circle cx="157" cy="940" r="21" fill="none" stroke="#8ca4b8" stroke-width="1.5"/>
+<path d="M164 925V955" class="ckt" style="stroke-width:3"/>
+<path d="M164 932L150 922M164 948L150 958M150 958V985M164 940H200M236 940H310M186 940V950M186 972V985M150 985H310" class="ckt"/>
+<path d="M150 958L159 957L155 950Z" fill="#172e43"/>
+<rect x="200" y="933" width="36" height="14" fill="#ffffff" class="ckt"/><text x="204" y="927" class="small">1 kΩ</text>
+<rect x="179" y="950" width="14" height="22" fill="#ffffff" class="ckt"/><text x="199" y="966" class="small">10 kΩ</text>
+<circle cx="150" cy="845" r="3" fill="#172e43"/><circle cx="150" cy="905" r="3" fill="#172e43"/>
+<circle cx="186" cy="940" r="3" fill="#172e43"/><circle cx="186" cy="985" r="3" fill="#172e43"/>
+<text x="52" y="945" class="small">S8050 NPN</text><text x="52" y="962" class="small">pins E B C</text><text x="52" y="979" class="small">(flat face)</text>
+<path d="M310 845H380" class="wire red"/><text x="318" y="837" class="small">5 V</text>
+<path d="M310 940H380" class="wire teal"/>
+<path d="M310 985H380" class="wire black"/>
 
 <!-- ===== Board (functional) ===== -->
 <rect x="380" y="120" width="260" height="890" rx="16" class="board"/>
@@ -51,8 +74,10 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 <text x="400" y="178" style="font-size:13px;fill:#b9c7d3">ESP-WROOM-32 · CP2102 USB</text>
 <text x="400" y="196" class="pinw">micro-USB</text>
 <text x="400" y="380" class="pinw">(Wi-Fi)</text>
-<text x="400" y="646" class="pinw">D25</text>
-<text x="400" y="686" class="pinw">GND</text>
+<text x="400" y="826" class="grp">TO BUZZER</text>
+<text x="400" y="850" class="pinw">VIN</text>
+<text x="400" y="945" class="pinw">D32</text>
+<text x="400" y="990" class="pinw">GND</text>
 
 <text x="620" y="208" class="grp" text-anchor="end">TO TFT</text>
 <text x="620" y="227" class="pinw" text-anchor="end">3V3</text>
@@ -148,9 +173,9 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 <circle cx="1308" cy="439" r="5" class="cidle"/><text x="1322" y="444" class="loc">VN</text>
 <circle cx="1308" cy="466" r="5" class="cidle"/><text x="1322" y="471" class="loc">D34</text>
 <circle cx="1308" cy="493" r="5" class="cidle"/><text x="1322" y="498" class="loc">D35</text>
-<circle cx="1308" cy="520" r="5" class="cidle"/><text x="1322" y="525" class="loc">D32</text>
+<circle cx="1308" cy="520" r="7.5" class="cteal"/><text x="1322" y="525" class="locused">D32</text>
 <circle cx="1308" cy="547" r="5" class="cidle"/><text x="1322" y="552" class="loc">D33</text>
-<circle cx="1308" cy="574" r="7.5" class="cpurple"/><text x="1322" y="579" class="locused">D25</text>
+<circle cx="1308" cy="574" r="5" class="cidle"/><text x="1322" y="579" class="loc">D25</text>
 <circle cx="1308" cy="601" r="5" class="cidle"/><text x="1322" y="606" class="loc">D26</text>
 <circle cx="1308" cy="628" r="7.5" class="cyellow"/><text x="1322" y="633" class="locused">D27</text>
 <circle cx="1308" cy="655" r="5" class="cidle"/><text x="1322" y="660" class="loc">D14</text>
@@ -178,10 +203,10 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 <circle cx="1512" cy="763" r="7.5" class="corange"/><text x="1498" y="768" class="locused" text-anchor="end">3V3</text>
 </g>
 <!-- callouts -->
-<path d="M1280 574H1298" class="wire purple"/><text x="1274" y="579" class="call" text-anchor="end" style="fill:#8058a0">IN/OUT button</text>
+<path d="M1280 520H1298" class="wire teal"/><text x="1274" y="525" class="call" text-anchor="end" style="fill:#13808c">Buzzer (via 1 kΩ)</text>
 <path d="M1280 628H1298" class="wire yellow"/><text x="1274" y="633" class="call" text-anchor="end" style="fill:#a67c00">R307 Touch</text>
-<path d="M1280 736H1298" class="wire black"/><text x="1274" y="741" class="call" text-anchor="end">R307 GND + button GND</text>
-<path d="M1280 763H1298" class="wire red"/><text x="1274" y="768" class="call" text-anchor="end" style="fill:#c83b48">R307 VCC (5 V)</text>
+<path d="M1280 736H1298" class="wire black"/><text x="1274" y="741" class="call" text-anchor="end">R307 + buzzer GND</text>
+<path d="M1280 763H1298" class="wire red"/><text x="1274" y="768" class="call" text-anchor="end" style="fill:#c83b48">R307 + buzzer 5 V</text>
 <path d="M1522 385H1540" class="wire green"/><text x="1546" y="390" class="call" style="fill:#18806a">TFT SDA</text>
 <path d="M1522 412H1540" class="wire blue"/><text x="1546" y="417" class="call" style="fill:#207cba">DS3231 SCL</text>
 <path d="M1522 493H1540" class="wire green"/><text x="1546" y="498" class="call" style="fill:#18806a">DS3231 SDA</text>
@@ -207,7 +232,7 @@ text{font-family:Arial,Helvetica,sans-serif;fill:#172e43}
 
 <rect x="590" y="1040" width="530" height="180" rx="12" class="box"/>
 <text x="610" y="1072" class="head">Parts</text>
-<text x="610" y="1100" class="body">• TFT replaces the OLED; D21/D22 now carry the DS3231.</text>
+<text x="610" y="1100" class="body">• Buzzer: long leg (+) to 5 V; diode stripe to 5 V.</text>
 <text x="610" y="1124" class="body">• DS3231 on 3.3 V (not 5 V) so it won't try to charge a CR2032.</text>
 <text x="610" y="1148" class="body">• R307 Touch → D27 turns the sensor light off when idle.</text>
 <text x="610" y="1172" class="body">• Sensor not detected? Swap the two R307 data wires.</text>

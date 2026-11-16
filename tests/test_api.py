@@ -230,3 +230,24 @@ def test_live_stream_sends_new_attendance_and_status(panel):
     assert panel.get('/api/live').status_code == 200
     panel.post('/api/logout')
     assert panel.get('/api/live').status_code == 401
+
+
+def test_server_decides_in_out_per_day_in_scan_time_order(client):
+    assign(client)
+    scan = lambda eid, when: client.post('/api/events', headers=DEVICE_HEADERS, json={
+        'event_id': eid, 'device_id': 'office-01', 'template_id': 1, 'occurred_at': when, 'confidence': 90, 'uptime_ms': 1})
+    # Arrive out of order (offline queue): the 18:00 scan is received before the 09:00 one.
+    assert scan('auto-0002', '2026-11-03T12:30:00Z').json()['status'] == 'recorded'   # 18:00 IST
+    assert scan('auto-0001', '2026-11-03T03:30:00Z').json()['status'] == 'recorded'   # 09:00 IST
+    assert scan('auto-0003', '2026-11-04T03:31:00Z').status_code == 200                # next day 09:01
+    rows = {r['event_id']: r['action'] for r in client.get('/api/attendance', headers=HEADERS).json()}
+    assert rows == {'auto-0001': 'IN', 'auto-0002': 'OUT', 'auto-0003': 'IN'}
+    csv_text = client.get('/api/export.csv?day=2026-11-03', headers=HEADERS).text
+    assert 'auto-0001' in csv_text and ',IN,' in csv_text and ',OUT,' in csv_text
+
+
+def test_scan_from_unassigned_slot_stays_unknown(client):
+    client.post('/api/events', headers=DEVICE_HEADERS, json={
+        'event_id': 'auto-0009', 'device_id': 'office-01', 'template_id': 7, 'occurred_at': '2026-11-03T03:30:00Z',
+        'confidence': 90, 'uptime_ms': 1})
+    assert client.get('/api/attendance', headers=HEADERS).json()[0]['action'] == 'SCAN'

@@ -50,7 +50,7 @@ class Event(BaseModel):
     event_id: str = Field(min_length=8, max_length=128, pattern=r'^[A-Za-z0-9_-]+$')
     device_id: str = Field(min_length=1, max_length=64)
     template_id: int = Field(ge=1, le=1000)
-    action: Literal['IN', 'OUT']
+    action: Literal['IN', 'OUT'] | None = None  # None: the server decides IN/OUT (see derived_actions)
     occurred_at: datetime | None = None
     confidence: int = Field(ge=0, le=65535)
     uptime_ms: int = Field(ge=0)
@@ -99,7 +99,7 @@ class DeviceReport(BaseModel):
     sensor: bool = False
     templates: int = Field(default=0, ge=0, le=65535)
     capacity: int = Field(default=0, ge=0, le=65535)
-    mode: Literal['IN', 'OUT'] = 'IN'
+    mode: Literal['IN', 'OUT'] | None = None  # scanners without an IN/OUT button send none
     clock_ok: bool = False
     rtc: bool = False
     touch: bool = False
@@ -496,7 +496,7 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
                                  (event.device_id, event.template_id)).fetchone()
             db.execute('INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                        (event.event_id, event.device_id, event.template_id, binding[0] if binding else None,
-                        event.action, event.occurred_at.isoformat() if event.occurred_at else None,
+                        event.action or 'AUTO', event.occurred_at.isoformat() if event.occurred_at else None,
                         now.isoformat(), event.confidence, event.uptime_ms, payload_hash))
         return {'event_id': event.event_id, 'status': 'recorded' if binding else 'unmapped'}
 
@@ -504,11 +504,30 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
         p.name, p.active, e.action, e.occurred_at, e.received_at, e.confidence
         FROM events e LEFT JOIN employees p ON p.code=e.employee_code'''
 
-    def present(row):
+    def scan_time(row):
+        return datetime.fromisoformat(row['occurred_at'] or row['received_at']).astimezone(office_zone)
+
+    def derived_actions(db):
+        """IN/OUT for scans sent without one: per employee and office day, in scan-time order (not arrival
+        order, so offline-queued scans still land correctly), the 1st is IN, the 2nd OUT, and so on.
+        Scans from an unassigned slot stay 'SCAN'."""
+        days = {}
+        for row in db.execute('SELECT rowid, event_id, employee_code, action, occurred_at, received_at FROM events'):
+            days.setdefault((row['employee_code'], scan_time(row).date()), []).append(
+                (scan_time(row), row['rowid'], row['event_id'], row['action']))
+        result = {}
+        for (employee, _), scans in days.items():
+            for index, (_, _, event_id, action) in enumerate(sorted(scans)):
+                if action == 'AUTO':
+                    result[event_id] = ('IN' if index % 2 == 0 else 'OUT') if employee else 'SCAN'
+        return result
+
+    def present(row, actions):
         item = dict(row)
-        stamp = datetime.fromisoformat(item['occurred_at'] or item['received_at']).astimezone(office_zone)
+        stamp = scan_time(item)
         item['local_time'] = stamp.isoformat()
         item['time_source'] = 'device' if item['occurred_at'] else 'received_only'
+        item['action'] = actions.get(item['event_id'], item['action'])
         return item, stamp
 
     def records(day: str | None, limit: int):
@@ -519,10 +538,11 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
             except ValueError:
                 raise HTTPException(422, 'Use YYYY-MM-DD')
         with connection() as db:
+            actions = derived_actions(db)
             rows = db.execute(ROW_SQL + ' ORDER BY COALESCE(e.occurred_at, e.received_at) DESC')
             result = []
             for row in rows:
-                item, stamp = present(row)
+                item, stamp = present(row, actions)
                 if target and stamp.date() != target:
                     continue
                 result.append(item)
@@ -548,7 +568,11 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
 
     def rows_after(seq):
         with connection() as db:
-            return [present(row)[0] for row in db.execute(ROW_SQL + ' WHERE e.rowid > ? ORDER BY e.rowid LIMIT 200', (seq,))]
+            rows = db.execute(ROW_SQL + ' WHERE e.rowid > ? ORDER BY e.rowid LIMIT 200', (seq,)).fetchall()
+            if not rows:
+                return []
+            actions = derived_actions(db)
+            return [present(row, actions)[0] for row in rows]
 
     @app.get('/api/live')
     async def live(request: Request, after: int = 0, who=Depends(require_admin)):

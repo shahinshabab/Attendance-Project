@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('list','build','upload','init-storage','monitor','bridge','enroll','delete','status','in','out')][string]$Action = 'list',
+    [ValidateSet('list','build','upload','init-storage','monitor','bridge','enroll','delete','status')][string]$Action = 'list',
     [string]$Port,
     [int]$Slot = 0,
     [string]$Server = 'http://127.0.0.1:8765',

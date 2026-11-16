@@ -16,14 +16,14 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <Adafruit_Fingerprint.h>
-#include <Adafruit_SSD1306.h>
 #include <sys/time.h>
 #include <errno.h>
 #include <vector>
 #include <algorithm>
 #include "config.h"
+#include "display.h"
 
-constexpr char FIRMWARE_VERSION[] = "0.4.0-dev";
+constexpr char FIRMWARE_VERSION[] = "0.6.3-dev";
 constexpr uint32_t WIFI_ATTEMPT_MS = 20000;   // per network before trying the other one
 constexpr uint32_t OFFICE_RETRY_MS = 300000;  // while on the fallback hotspot, retry office Wi-Fi
 constexpr uint32_t SYNC_INTERVAL_MS = 10000;  // server check-in: Wi-Fi updates and enrollment requests
@@ -68,18 +68,15 @@ uint32_t randomWord() { return esp_random(); }
 #endif
 Settings settings;
 Adafruit_Fingerprint finger(&sensorSerial);
-Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 // Kept for the whole run so HTTPS keep-alive avoids a TLS handshake on every request.
 WiFiClientSecure tls;
 HTTPClient http;
 bool displayReady = false, sensorReady = false, storageReady = false;
-uint8_t oledAddress = 0;
-bool isOut = false;
 std::vector<String> pending;
-String serialLine, screenLine = "Starting", screenDetail;
+String serialLine;
 uint32_t lastSend = 0, lastScan = 0, lastMatch = 0, lastSync = 0, lastResult = 0;
 uint16_t lastFinger = 0;
-bool requireRemoval = false, lastButton = HIGH;
+bool requireRemoval = false;
 RTC_DS3231 rtc;
 bool rtcReady = false;
 int touchActive = -1;  // level of the R307 touch wire while a finger is present; -1 = no wire, poll the sensor
@@ -93,28 +90,75 @@ String officeSsid, officePass, officeError;
 volatile uint8_t disconnectReason = 0;
 int resultId = 0;  // enrollment result waiting to be reported; persisted across resets
 
+// Office-local HH:MM for the screen only; scans are stored and sent in UTC.
+String clockText() {
+  time_t now = time(nullptr);
+  if (now < 1700000000) return "--:--";
+  now += DISPLAY_UTC_OFFSET;
+  struct tm local; gmtime_r(&now, &local);
+  char text[6]; strftime(text, sizeof(text), "%H:%M", &local);
+  return text;
+}
 String networkName() {
   if (!USE_WIFI) return "USB";
   if (!netUp) return "OFFLINE";
   return netTarget == NET_OFFICE ? "OFFICE" : "HOTSPOT";
 }
-void screen(const String &line, const String &detail = "") {
-  screenLine = line; screenDetail = detail;
-  if (!displayReady) return;
-  oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE); oled.setTextSize(1);
-  oled.setCursor(0, 0); oled.println("OFFICE ATTENDANCE");
-  oled.println(isOut ? "MODE: OUT" : "MODE: IN");
-  oled.println("NET: " + networkName() + (USE_WIFI && netUp ? (serverOk ? " SRV OK" : " SRV --") : ""));
-  oled.println(line); oled.println(detail);
-  oled.println("Pending: " + String(pending.size())); oled.display();
+String dateText() {
+  time_t now = time(nullptr);
+  if (now < 1700000000) return "";
+  now += DISPLAY_UTC_OFFSET;
+  struct tm local; gmtime_r(&now, &local);
+  char text[16]; strftime(text, sizeof(text), "%a, %d %b", &local);
+  String result = text;
+  result.replace(", 0", ", ");
+  return result;
 }
-void redraw() { screen(screenLine, screenDetail); }
+// What the display shows now, so network, clock and queue changes can redraw it.
+View currentView = View::Idle;
+String currentTitle, currentLine1, currentLine2;
+uint32_t viewUntil = 0;  // 0 = stay until replaced
+bool enrollView = false;
+int enrollStep = 1;
+ScreenStatus screenStatus() {
+  ScreenStatus s;
+  s.clock = clockText(); s.date = dateText(); s.online = !USE_WIFI || netUp; s.serverOk = serverOk; s.pending = pending.size();
+  return s;
+}
+// Active buzzer: a pattern is alternating on/off times in ms. Blocking but short (at most 0.4 s).
+bool buzzerOn = true;
+void beep(std::initializer_list<uint16_t> pattern) {
+  if (BUZZER_PIN < 0 || !buzzerOn) return;
+  bool on = true;
+  for (uint16_t ms : pattern) { digitalWrite(BUZZER_PIN, on ? HIGH : LOW); delay(ms); on = !on; }
+  digitalWrite(BUZZER_PIN, LOW);
+}
+void beepFor(View view) {
+  switch (view) {
+    case View::Ok: case View::Info: beep({90}); break;         // verified, enrolled, already scanned
+    case View::Warn: beep({70, 70, 70}); break;                // try again
+    case View::Error: beep({400}); break;                      // not registered, not saved, faults
+    default: break;
+  }
+}
+void show(View view, const String &title = "", const String &line1 = "", const String &line2 = "", uint32_t holdMs = 3000) {
+  currentView = view; currentTitle = title; currentLine1 = line1; currentLine2 = line2; enrollView = false;
+  viewUntil = view == View::Idle || holdMs == 0 ? 0 : millis() + holdMs;
+  if (displayReady) displayShow(view, title, line1, line2, screenStatus());
+  beepFor(view);  // after drawing, so the screen does not wait for the sound
+}
+void showEnroll(const String &who, const String &prompt, int step) {
+  enrollView = true; currentTitle = who; currentLine1 = prompt; enrollStep = step;
+  if (displayReady) displayEnroll(who, prompt, step, screenStatus());
+}
+void redraw() {
+  if (!displayReady) return;
+  if (enrollView) displayEnroll(currentTitle, currentLine1, enrollStep, screenStatus());
+  else displayShow(currentView, currentTitle, currentLine1, currentLine2, screenStatus());
+}
 void logMessage(const String &message) {
   StaticJsonDocument<512> d; d["type"] = "status"; d["message"] = message;
   serializeJson(d, Serial); Serial.println();
-}
-void setMode(bool out) {
-  isOut = out; settings.putBool("out", out); screen("Ready");
 }
 String filePath(const String &id) { return "/events/" + id + ".json"; }
 void acknowledge(const String &id) {
@@ -165,7 +209,7 @@ bool enqueue(uint16_t slot, uint16_t confidence) {
   StaticJsonDocument<512> event;
   event["event_id"] = id; event["device_id"] = DEVICE_ID;
   event["template_id"] = slot; event["confidence"] = confidence;
-  event["action"] = isOut ? "OUT" : "IN"; event["uptime_ms"] = millis();
+  event["uptime_ms"] = millis();  // no action: the server decides IN/OUT from the day's scans
   if (now > 1700000000) {
     char stamp[25]; struct tm utc; gmtime_r(&now, &utc);
     strftime(stamp, sizeof(stamp), "%Y-%m-%dT%H:%M:%SZ", &utc);
@@ -183,7 +227,10 @@ bool hasFallback() { return strlen(FALLBACK_WIFI_SSID) > 0; }
 String wifiReason() {
   switch (disconnectReason) {
     case 201: return "network not found";
-    case 2: case 15: case 202: case 204: return "wrong password or rejected";
+    // 15 (4-way handshake timeout) and 204 almost always mean a wrong password; 2 and 202 mean the
+    // router refused this board (MAC filter, client limit). The code is kept so the two can be told apart.
+    case 15: case 204: return "wrong password (reason " + String(disconnectReason) + ")";
+    case 2: case 202: return "rejected by router (reason " + String(disconnectReason) + ")";
     case 0: return "no response";
     default: return "reason " + String(disconnectReason);
   }
@@ -223,7 +270,7 @@ void applyWifi(JsonObject wifi) {
   settings.putString("wifi_ssid", ssid); settings.putString("wifi_pass", pass); settings.putUInt("wifi_ver", version);
   officeSsid = ssid; officePass = pass; wifiVersion = version; officeError = "";
   logMessage("Office Wi-Fi saved from server: " + ssid + " (version " + String(version) + "); switching");
-  screen("Wi-Fi updated", ssid.substring(0, 21));
+  show(View::Info, "Wi-Fi updated", ssid);
   startWifi(NET_OFFICE);
 }
 
@@ -275,17 +322,11 @@ void sendPending() {
 
 // ---- Fingerprint enrollment (USB command or server request) ----
 String captureError;
-bool cancelPressed() {
-  if (digitalRead(MODE_BUTTON) != LOW) return false;
-  lastButton = LOW;  // the loop must not also treat this press as an IN/OUT toggle
-  return true;
-}
 bool capture(uint8_t buffer, uint32_t timeout) {
   uint32_t start = millis();
   int lastError = -1;
   bool settling = true;
   while (millis() - start < timeout) {
-    if (cancelPressed()) { captureError = "cancelled at scanner"; logMessage("Enrollment cancelled with the button"); return false; }
     int result = finger.getImage();
     if (result == FINGERPRINT_OK && settling) {
       settling = false; delay(250); continue;  // the first frame is often a half-pressed finger
@@ -295,7 +336,7 @@ bool capture(uint8_t buffer, uint32_t timeout) {
       if (result == FINGERPRINT_OK) return true;
       if (result != lastError) {
         logMessage("Capture image2Tz error=0x" + String(result, HEX) + "; lift finger and try again");
-        screen("Read unclear", "Lift and place again");
+        showEnroll(currentTitle, "Lift, then place again", enrollStep);
       }
     } else if (result == FINGERPRINT_NOFINGER) {
       settling = true; delay(75); continue;
@@ -348,35 +389,35 @@ String slotProblem(uint16_t slot) {
 // Returns the outcome message; the prefixes are parsed by tools/device.py.
 bool enroll(int slot, const String &who, uint32_t firstWait, String &message) {
   auto fail = [&](const String &text) {
-    message = text; logMessage(text); screen("Enroll failed", text.substring(0, 21)); requireRemoval = true; return false;
+    message = text; logMessage(text); show(View::Error, "Enroll failed", "", text, 5000); requireRemoval = true; return false;
   };
   if (!sensorReady || slot < 1 || slot >= finger.capacity) return fail("Invalid slot or sensor unavailable");
   String problem = slotProblem(slot);
   if (problem.length()) return fail(problem);
-  String title = who.length() ? "Enroll " + who.substring(0, 14) : "Enroll slot " + String(slot);
+  String title = who.length() ? who : "Slot " + String(slot);
   constexpr int ATTEMPTS = 3;
   for (int attempt = 1; ; ++attempt) {
-    screen(title, attempt == 1 ? "Place finger" : "Again: place finger");
+    showEnroll(title, attempt == 1 ? "Place your finger" : "Again: place finger", 1);
     uint32_t wait = attempt == 1 ? firstWait : 60000;
     logMessage("Place finger (" + String(wait / 1000) + " seconds), attempt " + String(attempt) + " of " + String(ATTEMPTS));
     if (!capture(1, wait)) return fail("First capture failed: " + captureError);
-    screen(title, "Remove finger"); logMessage("Remove finger");
+    showEnroll(title, "Lift your finger", 1); beep({40}); logMessage("Remove finger");
     if (!waitRemoved(10000)) return fail("Removal timed out");
-    screen(title, "Same finger again"); logMessage("Place the same finger again (60 seconds)");
+    showEnroll(title, "Same finger again", 2); logMessage("Place the same finger again (60 seconds)");
     if (!capture(2, 60000)) return fail("Enrollment failed: second capture: " + captureError);
     int result = finger.createModel();
     if (result == FINGERPRINT_OK) break;
     if (result != FINGERPRINT_ENROLLMISMATCH || attempt == ATTEMPTS)
       return fail("Enrollment failed: fingers did not match after " + String(attempt) + " attempts (code 0x" + String(result, HEX) + ")");
     logMessage("The two scans did not match; lift and start again");
-    screen(title, "No match. Lift finger");
+    showEnroll(title, "No match. Lift finger", 1);
     if (!waitRemoved(10000)) return fail("Removal timed out");
     delay(800);
   }
   int result = finger.storeModel(slot);
   if (result != FINGERPRINT_OK) return fail("Enrollment failed: storeModel code=0x" + String(result, HEX));
   message = "Enrolled slot " + String(slot) + (who.length() ? " for " + who : ". Assign it to a staff member in the dashboard.");
-  logMessage(message); screen("Enrolled!", who.length() ? who.substring(0, 21) : "Slot " + String(slot));
+  logMessage(message); show(View::Ok, "Enrolled", who, "Slot " + String(slot), 5000);
   requireRemoval = true;
   return true;
 }
@@ -402,7 +443,7 @@ void runCommand(JsonObject command) {
   logMessage("Server requested enrollment " + String(id) + " for " + who + " in slot " + String(slot));
   tls.stop();  // the server closes idle connections during a long enrollment
   String message; bool ok = enroll(slot, who, ENROLL_WAIT_MS, message);
-  delay(2500);  // keep the outcome readable on the OLED
+  delay(2500);  // keep the outcome readable on the display
   // Persist before reporting so a reset or outage cannot lose a stored template's result.
   settings.putBool("res_ok", ok); settings.putString("res_msg", message.substring(0, 190)); settings.putInt("res_id", id);
   resultId = id; lastResult = 0;
@@ -433,6 +474,10 @@ void trustServerTime(time_t serverTime) {
 void detectTouchWire() {
 #if !defined(ESP8266)
   if (FINGER_TOUCH_PIN < 0) return;
+  touchActive = -1;
+  if (!settings.getUInt("touch_on", 1)) {  // USB TOUCH 0: wire faulty, poll the sensor instead
+    pinMode(FINGER_TOUCH_PIN, INPUT); logMessage("R307 touch wire switched off (TOUCH 1 to use it); polling the sensor"); return;
+  }
   pinMode(FINGER_TOUCH_PIN, INPUT_PULLDOWN); delay(5); int pulledDown = digitalRead(FINGER_TOUCH_PIN);
   pinMode(FINGER_TOUCH_PIN, INPUT_PULLUP); delay(5); int pulledUp = digitalRead(FINGER_TOUCH_PIN);
   if (pulledDown == LOW && pulledUp == HIGH) {  // the line follows the pulls: nothing drives it
@@ -455,7 +500,7 @@ void syncServer() {
   d["rssi"] = constrain(WiFi.RSSI(), -127, 0); d["wifi_version"] = wifiVersion; d["office_error"] = officeError;
   d["pending"] = pending.size(); d["sensor"] = sensorReady;
   d["templates"] = sensorReady ? finger.templateCount : 0; d["capacity"] = sensorReady ? finger.capacity : 0;
-  d["mode"] = isOut ? "OUT" : "IN"; d["clock_ok"] = time(nullptr) > 1700000000; d["rtc"] = rtcReady; d["touch"] = touchActive >= 0; d["uptime_ms"] = millis();
+  d["clock_ok"] = time(nullptr) > 1700000000; d["rtc"] = rtcReady; d["touch"] = touchActive >= 0; d["uptime_ms"] = millis();
   String body, reply; serializeJson(d, body);
   bool wasOk = serverOk;
   int code = post("/api/device/sync", body, reply);
@@ -478,7 +523,7 @@ void retrySensor() {
   if (!probeSensor()) return;
   sensorReady = true;
   logMessage("Fingerprint sensor ready; capacity=" + String(finger.capacity));
-  screen(storageReady ? "Ready" : "Hardware/storage error");
+  if (storageReady) show(View::Idle); else show(View::Error, "Storage error", "", "Scans cannot be saved", 0);
 }
 
 String fsUsage() {
@@ -501,18 +546,55 @@ void command(String line) {
   if (line.startsWith("ACK ") && !USE_WIFI) acknowledge(line.substring(4));
   else if (line.startsWith("TIME ")) {
     time_t epoch = strtoll(line.substring(5).c_str(), nullptr, 10);
-    if (epoch > 1700000000) { struct timeval tv = {epoch, 0}; settimeofday(&tv, nullptr); }
-  } else if (line == "IN" || line == "OUT") { setMode(line == "OUT"); }
-  else if (line == "STATUS") {
+    if (epoch > 1700000000) {
+      struct timeval tv = {epoch, 0}; settimeofday(&tv, nullptr);
+      // Commissioning without network: also store it in the DS3231 so it survives power cuts.
+      if (rtcReady && (rtc.lostPower() || labs((long)rtc.now().unixtime() - (long)epoch) > 2)) {
+        rtc.adjust(DateTime((uint32_t)epoch)); logMessage("Clock set from USB; DS3231 updated");
+      }
+      if (!enrollView && currentView == View::Idle) redraw();
+    }
+  } else if (line == "STATUS") {
     if (sensorReady) finger.getTemplateCount();
     logMessage("Device " + String(DEVICE_ID) + "; firmware=" + FIRMWARE_VERSION + "; sensor=" + String(sensorReady) +
-      "; oled=" + String(displayReady) + "; oled_address=0x" + String(oledAddress, HEX) +
+      "; display=" + displayInfo() + "; buzzer=" + String(BUZZER_PIN < 0 ? "none" : buzzerOn ? "on" : "muted") +
       "; storage=" + String(storageReady) + (storageReady ? fsUsage() : String("")) + "; pending=" + String(pending.size()) +
-      "; mode=" + (isOut ? "OUT" : "IN") + "; capacity=" + String(finger.capacity) +
-      "; templates=" + String(finger.templateCount) + "; rtc=" + String(rtcReady) + "; touch=" + String(touchActive >= 0 ? (touchActive == HIGH ? "high" : "low") : "none") + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
+      "; time=" + clockText() + "; capacity=" + String(finger.capacity) +
+      "; templates=" + String(finger.templateCount) + "; rtc=" + String(rtcReady) + "; touch=" + String(touchActive >= 0 ? (touchActive == HIGH ? "high" : "low") : "none") +
+      (FINGER_TOUCH_PIN >= 0 ? "; touch_now=" + String(digitalRead(FINGER_TOUCH_PIN) ? "high" : "low") : String("")) + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
       (USE_WIFI ? "; ssid=" + WiFi.SSID() + "; ip=" + WiFi.localIP().toString() + "; server=" + String(serverOk) +
        "; office_wifi=" + (hasOffice() ? officeSsid + " v" + String(wifiVersion) : String("none")) +
        (officeError.length() ? "; office_error=" + officeError : "") : ""));
+  } else if (line.startsWith("TFTROT ") || line.startsWith("TFTTAB ")) {
+    // Commissioning: orientation (0-3) and ST7735 variant (0 green, 1 red, 2 black tab), kept across resets.
+    settings.putUInt(line.startsWith("TFTROT ") ? "tft_rot" : "tft_tab", line.substring(7).toInt());
+    displaySetup(settings.getUInt("tft_rot", TFT_ROTATION), settings.getUInt("tft_tab", TFT_TAB));
+    redraw();
+    logMessage("Display: " + displayInfo());
+  } else if (line == "TOUCH 0" || line == "TOUCH 1") {
+    settings.putUInt("touch_on", line.endsWith("1")); requireRemoval = false; detectTouchWire();
+  } else if (line == "BEEP") {
+    if (BUZZER_PIN < 0) logMessage("No buzzer in this build");
+    else if (!buzzerOn) logMessage("Buzzer is muted: BUZZER 1 to unmute");
+    else { beep({90}); delay(300); beep({70, 70, 70}); delay(300); beep({400}); logMessage("Beeped: verified, try again, error"); }
+  } else if (line == "BUZZER 0" || line == "BUZZER 1") {
+    buzzerOn = line.endsWith("1"); settings.putUInt("buzzer", buzzerOn);
+    logMessage(buzzerOn ? "Buzzer on" : "Buzzer muted");
+#if !defined(ESP8266)
+  } else if (line == "SENSORSCAN") {
+    // Wiring check: tries both UART directions and the usual R307 speeds, then restores the configured ones.
+    String found;
+    for (int swap = 0; swap < 2; ++swap)
+      for (unsigned long baud : {57600UL, 9600UL, 19200UL, 38400UL, 115200UL}) {
+        sensorSerial.end(); delay(20);
+        sensorSerial.begin(baud, SERIAL_8N1, swap ? SENSOR_TX : SENSOR_RX, swap ? SENSOR_RX : SENSOR_TX); delay(50);
+        while (sensorSerial.available()) sensorSerial.read();
+        if (finger.verifyPassword()) found += String(found.length() ? ", " : "") + (swap ? "SWAPPED wires" : "wires as configured") + " at " + String(baud);
+      }
+    sensorSerial.end(); delay(20);
+    sensorSerial.begin(SENSOR_BAUD, SERIAL_8N1, SENSOR_RX, SENSOR_TX); delay(50);
+    logMessage("SENSORSCAN: " + (found.length() ? "answers with " + found : String("no answer on GPIO16/17 at any speed (check VCC 5 V, GND, and that TX/RX reach RX2/TX2)")));
+#endif
   } else if (line == "FSCHECK") {
     // Same write/rename path and name length as a real scan, under a name the queue ignores.
     if (!storageReady) { logMessage("FSCHECK: storage not mounted"); return; }
@@ -540,22 +622,15 @@ void command(String line) {
 }
 void setup() {
   Serial.begin(115200); delay(400);
-  settings.begin("attendance", false); isOut = settings.getBool("out", false);
+  settings.begin("attendance", false);
   if (settings.isKey("wifi_ssid")) { officeSsid = settings.getString("wifi_ssid", ""); officePass = settings.getString("wifi_pass", ""); }
   wifiVersion = settings.getUInt("wifi_ver", 0); resultId = settings.getInt("res_id", 0);
-  pinMode(MODE_BUTTON, INPUT_PULLUP);
+  if (BUZZER_PIN >= 0) { pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW); }
+  buzzerOn = settings.getUInt("buzzer", 1) != 0;
   Wire.begin(OLED_SDA, OLED_SCL);
   startClock();
-  // Probe first: display.begin alone does not reliably identify a missing panel.
-  for (unsigned attempt = 0; attempt < 5 && !displayReady; ++attempt) {
-    for (uint8_t address : {0x3C, 0x3D}) {
-      Wire.beginTransmission(address);
-      if (Wire.endTransmission() == 0 && oled.begin(SSD1306_SWITCHCAPVCC, address)) {
-        displayReady = true; oledAddress = address; break;
-      }
-    }
-    if (!displayReady) delay(100);
-  }
+  displaySetup(settings.getUInt("tft_rot", TFT_ROTATION), settings.getUInt("tft_tab", TFT_TAB));
+  displayReady = displayBegin();
 #if defined(ESP8266)
   LittleFS.setConfig(LittleFSConfig(false));  // never auto-format: a mount failure must not erase queued scans
   storageReady = LittleFS.begin();
@@ -587,8 +662,9 @@ void setup() {
   }
   logMessage(storageReady ? "Storage ready" : "Storage unavailable: attendance disabled; provision filesystem once");
   logMessage(sensorReady ? "Fingerprint sensor ready" : "Fingerprint sensor missing; check wiring and power");
-  logMessage(displayReady ? "OLED ready at 0x" + String(oledAddress, HEX) : "OLED missing; check SDA/SCL and power");
-  screen(storageReady && sensorReady ? "Ready" : "Hardware/storage error");
+  logMessage(displayReady ? "Display ready: " + displayInfo() : "Display missing; check wiring and power");
+  if (storageReady && sensorReady) show(View::Idle);
+  else show(View::Error, sensorReady ? "Storage error" : "Sensor missing", "", "Check wiring and power", 0);
 }
 void loop() {
   while (Serial.available()) {
@@ -597,12 +673,10 @@ void loop() {
     else if (serialLine.length() < 200) serialLine += c;
     else serialLine = "";
   }
-  static uint32_t buttonTime = 0;
-  bool button = digitalRead(MODE_BUTTON);
-  if (button == LOW && lastButton == HIGH && millis() - buttonTime > 300) {
-    setMode(!isOut); buttonTime = millis();
-  }
-  lastButton = button;
+  // Back to the idle clock once a result has been shown long enough and the finger is lifted.
+  if (!enrollView && currentView != View::Idle && viewUntil && millis() > viewUntil && !requireRemoval) show(View::Idle);
+  static String drawnClock;
+  if (!enrollView && currentView == View::Idle && clockText() != drawnClock) { drawnClock = clockText(); redraw(); }
   if (USE_WIFI) {
     wifiTick();
     if (netUp) {
@@ -614,20 +688,22 @@ void loop() {
   if (!sensorReady || !storageReady || millis() - lastScan < 150) { delay(5); return; }
   lastScan = millis();
   if (!fingerTouched()) {  // touch wire says no finger: leave the sensor (and its light) idle
-    if (requireRemoval) screen("Ready");
     requireRemoval = false; return;
   }
   if (requireRemoval && touchActive >= 0) return;  // finger still resting after a scan
   int image = finger.getImage();
-  if (image == FINGERPRINT_NOFINGER) { if (requireRemoval) screen("Ready"); requireRemoval = false; return; }
+  if (image == FINGERPRINT_NOFINGER) { requireRemoval = false; return; }
   if (image != FINGERPRINT_OK || requireRemoval) return;
   requireRemoval = true;
-  if (finger.image2Tz() != FINGERPRINT_OK) { screen("Try again"); return; }
+  if (finger.image2Tz() != FINGERPRINT_OK) { show(View::Warn, "Try again", "", "Place the finger flat"); return; }
   int result = finger.fingerSearch();
-  if (result == FINGERPRINT_NOTFOUND) { screen("Unknown fingerprint"); return; }
-  if (result != FINGERPRINT_OK) { screen("Sensor read error"); return; }
-  if (finger.fingerID == lastFinger && millis() - lastMatch < 10000) { screen("Already scanned"); return; }
+  if (result == FINGERPRINT_NOTFOUND) { show(View::Error, "Not registered", "", "Please contact the admin"); return; }
+  if (result != FINGERPRINT_OK) { show(View::Error, "Sensor error", "", "Please try again"); return; }
+  if (finger.fingerID == lastFinger && millis() - lastMatch < 10000) {
+    show(View::Info, "Already scanned", "Slot " + String(finger.fingerID), "Saved a moment ago"); return;
+  }
   if (enqueue(finger.fingerID, finger.confidence)) {
-    lastFinger = finger.fingerID; lastMatch = millis(); screen("Saved on device", "Slot " + String(finger.fingerID));
-  } else screen("NOT SAVED", "Queue full/storage error");
+    lastFinger = finger.fingerID; lastMatch = millis();
+    show(View::Ok, "Verified", "Slot " + String(finger.fingerID), "Saved");
+  } else show(View::Error, "Not saved", "", "Storage or queue full", 5000);
 }
