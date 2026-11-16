@@ -84,8 +84,8 @@ block('5 V buck converter (XL1509-5.0, 150 kHz)')
 part('U3', 'attendance:XL1509-5.0E1', 'XL1509-5.0', None, 'C61063',
      {1: 'VIN', 2: 'SW_BUCK', 3: 'BUCK_5V', 4: 'GND', 5: 'GND', 6: 'GND', 7: 'GND', 8: 'GND'})
 SS34('D1', 'GND', 'SW_BUCK')
-part('L1', 'attendance:FNR8040S470MT', '68uH', None, 'C168140', {1: 'SW_BUCK', 2: 'BUCK_5V'},
-     note='FNR8040S680MT, same 8x8 mm footprint as the 47 uH symbol it reuses')
+part('L1', 'attendance:FNR8040S470MT', '33uH', None, 'C168133', {1: 'SW_BUCK', 2: 'BUCK_5V'},
+     note='FNR8040S330MT (2.4 A / 2.0 A, 126 mOhm), same 8x8 mm footprint as the 47 uH symbol it reuses')
 C('C3', '470u', 'BUCK_5V', 'GND')
 C('C4', '22u', 'BUCK_5V', 'GND')
 LM66100('U8', 'BUCK_5V', '+5V', 'GND')

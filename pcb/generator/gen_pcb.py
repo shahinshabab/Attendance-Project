@@ -11,6 +11,7 @@ Layout agreed with the enclosure (see /enclosure in the project files):
     to the J11 pads just above it.
   - Status LEDs left of the sensor (light holes in the front shell); buzzer by the right-wall slots.
 """
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ import pcbnew
 import footprints
 import symbols
 from design import COMPONENTS
-from gen_schematic import symbol_footprint
+from gen_schematic import symbol_footprint, uid
 
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent / 'attendance-board'
@@ -27,7 +28,7 @@ BOARD_FILE = PROJECT / 'attendance-board.kicad_pcb'
 FREEROUTING = Path.home() / 'AppData/Local/Programs/Freerouting/freerouting-cli.exe'
 OX, OY = 100.0, 50.0           # board origin on the KiCad page
 W, H, CORNER = 70.0, 150.0, 3.0
-SENSOR_ZONE = (17.0, 97.0, 53.0, 150.0)   # x0, y0, x1, y1: no front parts except J11
+SENSOR_ZONE = (17.5, 97.0, 52.5, 150.0)   # x0, y0, x1, y1: no front parts except J11
 U1_POS, U1_ROT = (56.5, 19.0), -90       # antenna (module top) pointing to the right edge
 
 
@@ -49,7 +50,7 @@ PLACE = {
     'R25': (22, 10.5, 90, 'F'), 'R26': (24.5, 14, 90, 'F'),
     'R5': (29, 6.5, 0, 'F'), 'LED5': (33, 6.5, 0, 'F'),
     # 3.3 V regulator left of the ESP32; EN RC and decoupling along the module's pin-1 side
-    'C9': (39, 9.5, 0, 'F'), 'U4': (39, 17, 0, 'F'), 'C10': (33.5, 17, 90, 'F'), 'C11': (39, 24.5, 0, 'F'),
+    'C9': (39, 9.5, 0, 'F'), 'U4': (38, 17, 0, 'F'), 'C10': (32, 17, 90, 'F'), 'C11': (39, 24.5, 0, 'F'),
     'C19': (60.5, 6.5, 90, 'F'), 'C20': (58, 6.5, 90, 'F'), 'R18': (55.5, 6.5, 90, 'F'), 'C21': (53, 6.5, 90, 'F'),
     'TP3': (48, 6.5, 0, 'F'),
     # display header (cable to the module) and backlight switch
@@ -59,10 +60,10 @@ PLACE = {
     'J8': (4.5, 50, 90, 'F'), 'J7': (4.5, 64, 90, 'B'),
     'R30': (11, 62, 90, 'F'), 'R31': (13.5, 62, 90, 'F'), 'C25': (16, 62, 90, 'F'),
     # RTC (coin cell on the back, lower middle, above the sensor pads)
-    'U2': (27, 64, 0, 'F'), 'C22': (22, 62, 90, 'F'), 'C23': (32, 64, 90, 'F'), 'R24': (22, 67, 0, 'F'),
+    'U2': (27, 64, 0, 'F'), 'C22': (22, 62, 90, 'F'), 'C23': (32, 64, 90, 'F'), 'R24': (21.5, 67, 0, 'F'),
     'BT1': (35, 86.5, 0, 'B'),
     # battery: charger, protection, boost, switch-over (right, below the ESP32); connector on the back
-    'J3': (64, 44, 90, 'B'), 'J10': (66.5, 55, 90, 'F'), 'TP5': (63, 50, 0, 'F'),
+    'J3': (58.8, 44, 90, 'B'), 'J10': (66.5, 55, 90, 'F'), 'TP5': (63, 50, 0, 'F'),
     'C12': (40, 39, 0, 'F'), 'C13': (40, 42, 0, 'F'), 'U5': (46.5, 41.5, 0, 'F'), 'R6': (46.5, 46.5, 0, 'F'),
     'R7': (39, 48, 0, 'F'), 'LED3': (43, 48, 0, 'F'), 'R8': (39, 51, 0, 'F'), 'LED4': (43, 51, 0, 'F'),
     'R9': (47.5, 50, 90, 'F'),
@@ -78,19 +79,19 @@ PLACE = {
     'U3': (24, 79, 0, 'F'), 'D1': (31, 79, 90, 'F'), 'L1': (40, 79, 0, 'F'), 'C4': (31, 86, 90, 'F'),
     'C3': (40, 90.5, 0, 'F'), 'U8': (49, 86, 0, 'F'),
     # 5 V rail, external-power OR and mains sense (middle band, right)
-    'C7': (52, 76, 0, 'F'), 'C8': (52, 80.5, 0, 'F'), 'TP2': (53, 85, 0, 'F'),
+    'C7': (51.5, 76, 0, 'F'), 'C8': (52, 80.5, 0, 'F'), 'TP2': (53, 85, 0, 'F'),
     'D4': (58, 75, 0, 'F'), 'D5': (58, 80, 0, 'F'), 'C6': (64, 77.5, 90, 'F'),
     'R14': (63, 84, 90, 'F'), 'R15': (65.5, 84, 90, 'F'),
     # sensor pads just above the sensor, supply jumper and its capacitor
-    'J11': (35, 99.7, 90, 'F'), 'JP2': (24, 95.5, 0, 'F'), 'C24': (48, 95.5, 0, 'F'),
+    'J11': (35, 99.7, 90, 'F'), 'JP2': (24, 95.5, 0, 'F'), 'C24': (48.5, 95.5, 0, 'F'),
     # left of the sensor: status LEDs behind the light holes, GND test point; 12 V jack at the bottom
     'LED1': (12, 118, 90, 'F'), 'LED2': (15, 118, 90, 'F'), 'R33': (12, 113.5, 90, 'F'), 'R34': (15, 113.5, 90, 'F'),
     'TP4': (5, 113, 0, 'F'),
-    'J1': (12, 143, 0, 'F'),
+    'J1': (12.6, 143, 0, 'F'),
     # right of the sensor: buzzer by the sound slots, USB-C at the bottom
     'BZ1': (62, 105, 0, 'F'), 'Q6': (57.5, 114, 0, 'F'), 'R32': (62, 114, 0, 'F'), 'D6': (65.5, 118, 0, 'F'),
     'U10': (66, 134, 0, 'F'),
-    'J2': (55, 146.5, 0, 'F'), 'R2': (57, 139.5, 90, 'F'), 'R3': (59.5, 139.5, 90, 'F'), 'C5': (62, 139.5, 90, 'F'),
+    'J2': (57.4, 146.5, 0, 'F'), 'R2': (57, 139.5, 90, 'F'), 'R3': (59.5, 139.5, 90, 'F'), 'C5': (62, 139.5, 90, 'F'),
 }
 
 POWER = ['+5V', '+3V3', 'BAT_P', 'BAT_N', 'BOOST_5V', 'BOOST_SW', 'USB_5V', 'EXT_5V', 'SENSOR_VCC', 'TFT_LED', 'FET_DRAIN', 'VBAT_RTC']
@@ -240,6 +241,31 @@ def add_gnd_zone(board, net, layer):
     board.Add(zone)
 
 
+def net_name(net):
+    """Schematic nets come from local labels on the root sheet, which KiCad names '/<label>'."""
+    return '/' + net
+
+
+def sync_project_rules():
+    """kicad-cli DRC reads rules and net classes from the .kicad_pro, not the board: keep them equal."""
+    pro = PROJECT / 'attendance-board.kicad_pro'
+    data = json.loads(pro.read_text(encoding='utf-8'))
+    rules = data['board']['design_settings']['rules']
+    rules.update(min_track_width=0.15, min_clearance=0.15, min_copper_edge_clearance=0.3,
+                 min_via_diameter=0.5, min_through_hole_diameter=0.3)
+    data['board']['design_settings']['defaults']['zones']['min_clearance'] = 0.25
+    ns = data['net_settings']
+    template = next(c for c in ns['classes'] if c['name'] == 'Default')
+    classes = [dict(template, track_width=0.25, clearance=0.15, via_diameter=0.6, via_drill=0.3)]
+    for i, (name, width, via, drill) in enumerate([('Power', 0.4, 0.7, 0.35), ('HighCurrent', 0.8, 0.8, 0.4)]):
+        classes.append(dict(template, name=name, track_width=width, clearance=0.15, via_diameter=via, via_drill=drill, priority=i))
+    ns['classes'] = classes
+    ns['netclass_patterns'] = ([{'netclass': 'Power', 'pattern': net_name(n)} for n in POWER]
+                               + [{'netclass': 'HighCurrent', 'pattern': net_name(n)} for n in HIGH_CURRENT])
+    ns['netclass_assignments'] = {}
+    pro.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+
+
 def configure_rules(board):
     ds = board.GetDesignSettings()
     ds.m_TrackMinWidth = pcbnew.FromMM(0.15)
@@ -257,7 +283,7 @@ def configure_rules(board):
         nc.SetViaDiameter(pcbnew.FromMM(via)); nc.SetViaDrill(pcbnew.FromMM(via_drill))
         ns.SetNetclass(name, nc)
         for net in nets:
-            ns.SetNetclassPatternAssignment(net, name)
+            ns.SetNetclassPatternAssignment(net_name(net), name)
     ns.RecomputeEffectiveNetclasses()
 
 
@@ -269,20 +295,24 @@ def build():
     for comp in COMPONENTS.values():
         for net in comp['pins'].values():
             if net != 'NC' and net not in nets:
-                nets[net] = pcbnew.NETINFO_ITEM(board, net)
+                nets[net] = pcbnew.NETINFO_ITEM(board, net_name(net))
                 board.Add(nets[net])
 
     unplaced, unmatched = [], []
     for ref, comp in COMPONENTS.items():
         fp = footprints.load(footprint_id(comp))
         fp.SetParent(board)
+        lib, name = footprint_id(comp).split(':', 1)
+        fp.SetFPID(pcbnew.LIB_ID(lib, name))
+        fp.SetPath(pcbnew.KIID_PATH('/' + uid('sym', ref)))
         repair_footprint(ref, fp)
         fp.SetReference(ref)
         fp.SetValue(comp['value'])
-        if comp['lcsc']:
-            field = pcbnew.PCB_FIELD(fp, fp.GetNextFieldOrdinal(), 'LCSC')
-            field.SetText(comp['lcsc']); field.SetVisible(False); field.SetLayer(pcbnew.F_Fab)
-            fp.Add(field)
+        for name, text in (('LCSC', comp['lcsc'] or ''), ('Note', comp['note'])):
+            if name == 'LCSC' or text:   # same fields as the schematic symbol (schematic parity)
+                field = pcbnew.PCB_FIELD(fp, fp.GetNextFieldOrdinal(), name)
+                field.SetText(text); field.SetVisible(False); field.SetLayer(pcbnew.F_Fab)
+                fp.Add(field)
         attrs = fp.GetAttributes()
         if comp['dnp']:
             attrs |= pcbnew.FP_DNP
@@ -294,6 +324,13 @@ def build():
             net = comp['pins'].get(number)
             if net and net != 'NC':
                 pad.SetNet(nets[net])
+            elif net == 'NC':   # KiCad's name for a pin with a no-connect flag
+                pin_name = {p['number']: p['name'] for p in symbols.pins(symbols.load(comp['symbol']))}.get(number, '~')
+                key = f'unconnected-({ref}-Pad{number})' if pin_name in ('', '~', number) else f'unconnected-({ref}-{pin_name}-Pad{number})'
+                if key not in nets:
+                    nets[key] = pcbnew.NETINFO_ITEM(board, key)
+                    board.Add(nets[key])
+                pad.SetNet(nets[key])
             elif number and net is None and pad.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH:
                 unmatched.append(f'{ref}.{number}')
         board.Add(fp)
@@ -325,11 +362,14 @@ def build():
     add_text(board, 'R307S: keep clear', 35, 125, pcbnew.F_SilkS)
     add_text(board, 'J11: 5V GND TX RX TCH 3V3', 35, 102.5, pcbnew.F_SilkS, 1.0)
     add_text(board, 'ATTENDANCE BOARD v0.2  2026-11', 35, 120, pcbnew.B_SilkS, 1.0, mirrored=True)
-    add_text(board, 'LiPo +', 64, 37.5, pcbnew.B_SilkS, 0.9, mirrored=True)
+    add_text(board, 'LiPo +', 58.8, 37.5, pcbnew.B_SilkS, 0.9, mirrored=True)
     add_text(board, 'TAMPER', 4.5, 58.5, pcbnew.B_SilkS, 0.9, mirrored=True)
+    # H2 is inside the antenna keep-out (fixed case boss): a metal screw there would detune the antenna.
+    add_text(board, 'H2: nylon screw (antenna)', 52, 2.2, pcbnew.B_SilkS, 0.8, mirrored=True)
     add_gnd_zone(board, nets['GND'], pcbnew.F_Cu)
     add_gnd_zone(board, nets['GND'], pcbnew.B_Cu)
     pcbnew.SaveBoard(str(BOARD_FILE), board)
+    sync_project_rules()
     print(f'Wrote {BOARD_FILE.name}: {len(COMPONENTS)} footprints, {len(nets)} nets')
     if unplaced:
         print('NOT PLACED:', ' '.join(unplaced))

@@ -12,7 +12,7 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | Clock | U2 | DS3231MZ+TRL (SOIC-8, ±5 ppm) | C107410 | Extended | 10,325 | 3.35 | In KiCad's library; the SOIC-16 DS3231SN costs $9–11 for ±2 ppm the server corrects anyway |
 | Clock | BT1 | Keystone 3034 CR2032 holder | C5213768 | Hand-soldered (back) | 776 | 0.39 | Replaces CR2032-BS-6-1 (C70377), which has no EasyEDA footprint data; KiCad has the exact Keystone 3034 footprint |
 | 5 V buck | U3 | XL1509-5.0E1 (40 V in, 2 A, fixed 5 V) | C61063 | **Basic** | 426,392 | 0.25 | No feedback divider; Basic part |
-| 5 V buck | L1 | FNR8040S680MT 68 µH, 8 × 8 mm | C168140 | Extended | 4,472 | 0.12 | 68 µH per the XL1509 datasheet's 12 V → 5 V example; check saturation current ≥ 1.5 A before ordering |
+| 5 V buck | L1 | FNR8040S330MT 33 µH, 8 × 8 mm | C168133 | Extended | 2,587 | 0.12 | JLCPCB lists 2.4 A / 2.0 A, 126 mΩ (checked 2026-11-16); the 68 µH FNR8040S680MT (C168140) is only 1.4 A / 1.6 A |
 | 5 V buck | D1 | SS34 Schottky (catch diode) | C8678 | **Basic** | 3,180,122 | 0.04 | |
 | 3.3 V | U4 | AMS1117-3.3 (1 A, SOT-223) | C6186 | **Basic** | 1,720,437 | 0.21 | |
 | Input | Q1 | AO3401A P-MOSFET (reverse polarity) | C15127 | **Basic** | 1,677,808 | 0.10 | |
@@ -81,7 +81,8 @@ Ways to cut cost later:
 
 ## Still to verify before ordering (2026-11-16 review)
 
-- **L1 is probably too weak.** 68 µH in an 8 × 8 mm package is typically rated about 1.2 A saturation (e.g. Taiyo Yuden NR8040T680M), but the 5 V buck can see about 1.3 A peak (system load plus 0.5 A battery charging). Choose an inductor with at least 2 A saturation (33–47 µH also suits the XL1509 at 12 V in).
+- **L1 (resolved 2026-11-16):** the 68 µH FNR8040S680MT was only 1.4 A / 1.6 A for a buck that can see about 1.3 A peak (system load plus 0.5 A battery charging). Now FNR8040S330MT 33 µH (C168133), 2.4 A / 2.0 A, same footprint; 33 µH also suits the XL1509 at 12 V in. Confirm which figure is Isat in the datasheet before ordering.
+- **H2 sits inside the ESP32 antenna keep-out** (the module's rule area reaches 24 mm above and below the antenna, and H2 is the top-right case screw). It stays because the case boss is fixed there: **use a nylon screw at H2**, never metal. DRC reports this as its only two errors (items_not_allowed for H2); they are accepted.
 - **MLT-8530 buzzer** is a passive transducer: the firmware now plays a 2.7 kHz tone (`BUZZER_TONE_HZ`). It stays on 3.3 V because it is rated for about 3.6 V.
 
 ## Still to verify in the schematic stage
