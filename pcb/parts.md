@@ -39,8 +39,7 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | Buttons | SW1, SW2 | TS-1187A tactile switch (RESET, BOOT) | C318884 | **Basic** | 1,044,364 | 0.02 | |
 | Sensor | J4 | MX1.25 6-pin SMD socket (+ 6 solder pads) | C3029354 | Extended | 4,023 | 0.10 | For R307/AS608 cables |
 | Display | J5 | 1 × 8 female header, 2.54 mm | C42431840 | Extended | 11,111 | 0.11 | Through-hole; TFT plugs in directly |
-| Button | J6 | JST B2B-XH-A 2-pin (IN/OUT button) | C158012 | Extended | 608,675 | 0.04 | Through-hole |
-| Tamper | J7 | JST B2B-XH-A 2-pin | C158012 | Extended | — | — | Same part as J6 |
+| Tamper | J7 | JST B2B-XH-A 2-pin | C158012 | Extended | 608,675 | 0.04 | Through-hole. (J6, the IN/OUT button connector, was removed on 2026-11-15) |
 | I²C | J8 | JST B4B-XH-A 4-pin | C144395 | Extended | 666,320 | 0.06 | Through-hole |
 | Program | J9 | 1 × 6 pin header, 2.54 mm | — | DNP | — | — | Left unfitted; hand-solder if needed |
 

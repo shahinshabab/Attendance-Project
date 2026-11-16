@@ -158,11 +158,11 @@ C('C18', '100n', 'BAT_SENSE', 'GND')
 block('ESP32-WROOM-32E')
 part('U1', 'RF_Module:ESP32-WROOM-32E', 'ESP32-WROOM-32E-N4', 'RF_Module:ESP32-WROOM-32E', 'C701341', {
     1: 'GND', 2: '+3V3', 3: 'EN', 4: 'MAINS_SENSE', 5: 'CHRG_N', 6: 'BAT_SENSE', 7: 'RTC_INT', 8: 'BUZZER',
-    9: 'LED_OK', 10: 'BUTTON', 11: 'TAMPER', 12: 'SENSOR_TOUCH', 13: 'TFT_BL', 14: 'NC', 15: 'GND', 16: 'LED_ERR',
+    9: 'LED_OK', 10: 'NC', 11: 'TAMPER', 12: 'SENSOR_TOUCH', 13: 'TFT_BL', 14: 'NC', 15: 'GND', 16: 'LED_ERR',
     17: 'NC', 18: 'NC', 19: 'NC', 20: 'NC', 21: 'NC', 22: 'NC', 23: 'NC', 24: 'NC', 25: 'IO0', 26: 'TFT_DC',
     27: 'SENSOR_TX', 28: 'SENSOR_RX', 29: 'TFT_CS', 30: 'TFT_SCK', 31: 'TFT_RST', 32: 'NC', 33: 'I2C_SDA',
     34: 'ESP_RXD', 35: 'ESP_TXD', 36: 'I2C_SCL', 37: 'TFT_MOSI', 38: 'GND', 39: 'GND'},
-    note='IO2, IO12, IO15 left unconnected (strapping pins); IO6-11 are internal flash')
+    note='IO2, IO12, IO15 left unconnected (strapping pins); IO25 spare (no IN/OUT button); IO6-11 are internal flash')
 C('C19', '10u', '+3V3', 'GND')
 C('C20', '100n', '+3V3', 'GND')
 
@@ -219,10 +219,7 @@ part('Q2', 'Transistor_FET:AO3401A', 'AO3401A', 'Package_TO_SOT_SMD:SOT-23', 'C1
 R('R27', '1k', 'TFT_BL', 'TFT_BL_G')
 R('R28', '100k', 'TFT_BL_G', 'GND')
 
-block('IN/OUT button and case tamper switch')
-part('J6', 'Connector_Generic:Conn_01x02', 'BUTTON', 'Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical', 'C158012',
-     {1: 'BUTTON', 2: 'GND'})
-R('R29', '10k', '+3V3', 'BUTTON')
+block('Case tamper switch')
 part('J7', 'Connector_Generic:Conn_01x02', 'TAMPER', 'Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical', 'C158012',
      {1: 'TAMPER_IN', 2: 'GND'}, note='Case switch, closed when the case is shut')
 R('R30', '10k', '+3V3', 'TAMPER_IN')

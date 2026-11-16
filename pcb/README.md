@@ -54,7 +54,7 @@ The schematic is generated from [generator/design.py](generator/design.py) (see 
 ### 3.1 Functional
 
 1. Run the existing firmware (`firmware/`, `-Board esp32`) **with the same GPIO numbers** as the prototype (§5).
-2. Connect, through keyed connectors: R307 fingerprint sensor (6 wires, including touch), 1.8″ ST7735 TFT (8 wires), IN/OUT button, case tamper switch.
+2. Connect, through keyed connectors: R307 fingerprint sensor (6 wires, including touch), 1.8″ ST7735 TFT (8 wires), case tamper switch. There is no IN/OUT button: the server decides IN/OUT.
 3. Keep accurate time with no power and no internet: an on-board DS3231 with a coin-cell backup.
 4. Give clear feedback: a buzzer and two status LEDs (green = OK, red = error), in addition to the TFT.
 5. Flash firmware **without a USB port on the board**, through an internal header (§4.5).
@@ -150,7 +150,6 @@ Locking, keyed **JST-XH 2.5 mm** connectors unless noted. Pin 1 is marked on the
 | J_R307 | GROW R307 (or Adafruit AS608) fingerprint sensor | 1 +5V, 2 GND, 3 TXD (sensor out → IO16), 4 RXD (sensor in ← IO17), 5 Touch Sense (→ IO27), 6 Touch Sense Power (3.3 V) | Two footprints wired in parallel: a **1.25 mm 6-pin socket** (MX1.25 / PicoBlade-compatible) for double-ended cables, **and 6 × 2.54 mm solder pads** for the R307's loose leads. **Wire colours vary by seller: check each lead against the sensor's datasheet before soldering** |
 | JP_SENSOR | Sensor supply select | 5 V (default) / 3.3 V | Solder jumper: R307 needs 4.2–6 V; some AS608 boards are 3.3 V only. If 3.3 V is chosen for an R307, its own "3.3V interface" pads must also be shorted; with the default 5 V, leave them open. The R307's USB pads (5V, D+, D−, GND) are not used |
 | J_TFT | 1.8″ ST7735 TFT module ("1.8TFT SPI 128*160 V1.1", red board) | 1 VCC, 2 GND, 3 CS, 4 RESET, 5 A0, 6 SDA, 7 SCK, 8 LED | **8-pin 2.54 mm female header on the board's front**, so the module plugs straight in, plus a 2.54 mm mounting standoff position under each of the module's corner holes. Order confirmed from the V1.1 module's silkscreen. **VCC is fed from 5 V**: the module's own regulator (U1) makes its 3.3 V, with its J1 jumper left as supplied, which takes load off the board's 3.3 V rail. Its signal pins are 3.3 V logic, matching the ESP32. LED (backlight) comes from the switched 3.3 V (§4.4). The module's 4-pin SD-card header (J4) is not used |
-| J_BTN | IN/OUT button | IO25, GND | 10 kΩ pull-up on the board (the firmware also enables the internal one) |
 | J_TAMPER | Case switch (normally closed when the case is shut) | IO26, GND | 10 kΩ pull-up; RC filter (1 kΩ + 100 nF) against noise |
 | J_I2C | Expansion (optional) | 3.3V, GND, SDA, SCL | For a future sensor; same bus as the DS3231 |
 | J_PROG | Flashing (internal) | see §4.5 | |
@@ -195,7 +194,7 @@ The board has **no USB-to-serial chip**. Flashing uses a cheap external **USB-UA
 | IO21 | I²C SDA (DS3231, J_I2C) | `OLED_SDA` | 4.7 kΩ pull-up |
 | IO22 | I²C SCL | `OLED_SCL` | 4.7 kΩ pull-up |
 | IO35 | DS3231 INT/SQW | *new* | Input only; 10 kΩ pull-up |
-| IO25 | IN/OUT button | `MODE_BUTTON` | |
+| IO25 | spare | — | IN/OUT button removed (2026-11-15): the server decides IN/OUT |
 | IO26 | Tamper switch | *new* | |
 | IO32 | Buzzer | *new* | |
 | IO33 | Green LED | *new* | |
