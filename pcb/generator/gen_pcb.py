@@ -25,7 +25,8 @@ from gen_schematic import symbol_footprint, uid
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent / 'attendance-board'
 BOARD_FILE = PROJECT / 'attendance-board.kicad_pcb'
-FREEROUTING = Path.home() / 'AppData/Local/Programs/Freerouting/freerouting-cli.exe'
+# Freerouting 1.9.0 (Java 17). The native freerouting-cli 2.5.0 crashes on this board (GraalVM serialization) and 2.5.0's jar needs Java 25.
+FREEROUTING = Path.home() / 'AppData/Local/Programs/Freerouting/freerouting-1.9.0.jar'
 OX, OY = 100.0, 50.0           # board origin on the KiCad page
 W, H, CORNER = 70.0, 150.0, 3.0
 SENSOR_ZONE = (17.5, 97.0, 52.5, 150.0)   # x0, y0, x1, y1: no front parts except J11
@@ -235,7 +236,7 @@ def add_gnd_zone(board, net, layer):
         outline.Append(pt(x, y))
     zone.SetLocalClearance(pcbnew.FromMM(0.25))
     zone.SetMinThickness(pcbnew.FromMM(0.25))
-    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)   # SMD pads solid, through-holes with reliefs
     zone.SetThermalReliefGap(pcbnew.FromMM(0.3))
     zone.SetThermalReliefSpokeWidth(pcbnew.FromMM(0.4))
     board.Add(zone)
@@ -378,17 +379,105 @@ def build():
     return board
 
 
-def route(board):
+def unrouted(board):
+    board.BuildConnectivity()
+    return board.GetConnectivity().GetUnconnectedCount(False)
+
+
+def route(board, attempts=3):
+    """Freerouting with GND routed as an ordinary net (the pours are removed for routing and added back
+    afterwards, so ground never depends on pour islands). Passes repeat on the routed board until every
+    connection is made."""
+    gnd = board.FindNet(net_name('GND'))
+    for zone in list(board.Zones()):
+        if not zone.GetIsRuleArea():
+            board.Remove(zone)
     dsn, ses = PROJECT / 'attendance-board.dsn', PROJECT / 'attendance-board.ses'
-    if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
-        raise RuntimeError('DSN export failed')
-    print('Routing with Freerouting...')
-    subprocess.run([str(FREEROUTING), '-de', str(dsn), '-do', str(ses), '-mp', '40'], check=True)
-    if not pcbnew.ImportSpecctraSES(board, str(ses)):
-        raise RuntimeError('SES import failed')
+    for attempt in range(1, attempts + 1):
+        if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
+            raise RuntimeError('DSN export failed')
+        print(f'Routing with Freerouting (pass {attempt})...')
+        command = ['java', '-jar', str(FREEROUTING), '-de', str(dsn), '-do', str(ses), '-mp', '40']
+        try:  # route optimisation sometimes runs away; fall back to the plain autorouter result
+            subprocess.run(command, check=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            print('Optimisation took too long; routing again without it')
+            subprocess.run(command + ['-mt', '0'], check=True, timeout=600)
+        if not pcbnew.ImportSpecctraSES(board, str(ses)):
+            raise RuntimeError('SES import failed')
+        left = unrouted(board)
+        print(f'Unrouted connections: {left}')
+        if not left:
+            break
+    add_gnd_zone(board, gnd, pcbnew.F_Cu)
+    add_gnd_zone(board, gnd, pcbnew.B_Cu)
+
+
+def stitch_ground(board, pitch=5.0):
+    """GND vias where both ground pours are present: a grid across the board, plus one next to every
+    GND SMD pad, so no pour island is left floating. Vias go only where the filled copper already keeps
+    clearance from every other net (the fills also exclude the antenna keep-out)."""
+    filler = pcbnew.ZONE_FILLER(board)
+    filler.Fill(board.Zones())
+    gnd = board.FindNet(net_name('GND'))
+    fills = {z.GetLayer(): z.GetFilledPolysList(z.GetLayer()) for z in board.Zones() if z.GetNetname() == gnd.GetNetname()}
+    radius = pcbnew.FromMM(0.3 + 0.05)
+    vias = [v.GetPosition() for v in board.GetTracks() if isinstance(v, pcbnew.PCB_VIA)]
+
+    def fits(p):
+        ring = [pcbnew.VECTOR2I(p.x + int(radius * dx), p.y + int(radius * dy))
+                for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, 0.7), (0.7, -0.7), (-0.7, -0.7)]]
+        return all(poly.Contains(q) for poly in fills.values() for q in ring)
+
+    def near_via(p, mm):
+        limit = pcbnew.FromMM(mm) ** 2
+        return any((v.x - p.x) ** 2 + (v.y - p.y) ** 2 < limit for v in vias)
+
+    def add(p):
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(p); via.SetWidth(pcbnew.FromMM(0.6)); via.SetDrill(pcbnew.FromMM(0.3)); via.SetNet(gnd)
+        board.Add(via); vias.append(p)
+
+    added = 0
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() != gnd.GetNetname() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            c = pad.GetPosition()
+            if near_via(c, 2.5):
+                continue
+            for r in (1.0, 1.4, 1.8, 2.3):
+                options = [pcbnew.VECTOR2I(c.x + int(pcbnew.FromMM(r) * dx), c.y + int(pcbnew.FromMM(r) * dy))
+                           for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0), (0.7, 0.7), (-0.7, 0.7), (0.7, -0.7), (-0.7, -0.7)]]
+                hit = next((q for q in options if not near_via(q, 1.0) and fits(q)), None)
+                if hit:
+                    add(hit); added += 1
+                    break
+    steps_x, steps_y = int(W // pitch), int(H // pitch)
+    for i in range(1, steps_x + 1):
+        for j in range(1, steps_y + 1):
+            p = pt(i * pitch - pitch / 2, j * pitch - pitch / 2)
+            if not near_via(p, pitch * 0.6) and fits(p):
+                add(p); added += 1
+    # Any pour island still without a via: search it on a fine grid for a spot both pours cover.
+    filler.Fill(board.Zones())
+    fills = {z.GetLayer(): z.GetFilledPolysList(z.GetLayer()) for z in board.Zones() if z.GetNetname() == gnd.GetNetname()}
+    step = pcbnew.FromMM(0.4)
+    for layer, poly in fills.items():
+        for k in range(poly.OutlineCount()):
+            island = pcbnew.SHAPE_POLY_SET(); island.AddOutline(poly.Outline(k))
+            if any(island.Contains(v) for v in vias):
+                continue
+            box = poly.Outline(k).BBox()
+            spot = next((q for y in range(box.GetY(), box.GetBottom(), step) for x in range(box.GetX(), box.GetRight(), step)
+                         for q in [pcbnew.VECTOR2I(x, y)] if island.Contains(q) and not near_via(q, 1.0) and fits(q)), None)
+            if spot:
+                add(spot); added += 1
+    print(f'Ground stitching: {added} vias')
 
 
 def finish(board):
+    stitch_ground(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     pcbnew.SaveBoard(str(BOARD_FILE), board)
     print('Zones filled and board saved')
