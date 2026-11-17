@@ -21,9 +21,10 @@
 #include <vector>
 #include <algorithm>
 #include "config.h"
+#include "board.h"
 #include "display.h"
 
-constexpr char FIRMWARE_VERSION[] = "0.7.0-dev";
+constexpr char FIRMWARE_VERSION[] = "0.7.1-dev";
 constexpr uint32_t WIFI_ATTEMPT_MS = 20000;   // per network before trying the other one
 constexpr uint32_t OFFICE_RETRY_MS = 300000;  // while on the fallback hotspot, retry office Wi-Fi
 constexpr uint32_t SYNC_INTERVAL_MS = 10000;  // server check-in: Wi-Fi updates and enrollment requests
@@ -125,13 +126,27 @@ ScreenStatus screenStatus() {
   s.clock = clockText(); s.date = dateText(); s.online = !USE_WIFI || netUp; s.serverOk = serverOk; s.pending = pending.size();
   return s;
 }
-// Active buzzer: a pattern is alternating on/off times in ms. Blocking but short (at most 0.4 s).
+// Buzzer: a pattern is alternating on/off times in ms. Blocking but short (at most 0.4 s).
+// The main board's MLT-8530 is a passive transducer, so the ESP32 plays a square-wave tone.
+// An active buzzer (the prototype's TMB12A05) also sounds with the tone. BUZZER_TONE_HZ 0 = plain on/off.
+#ifndef BUZZER_TONE_HZ
+#define BUZZER_TONE_HZ 2700
+#endif
+#if !defined(ESP8266)
+constexpr uint8_t BUZZER_LEDC_CHANNEL = 4;
+#endif
 bool buzzerOn = true;
+void buzzerSet(bool on) {
+#if !defined(ESP8266)
+  if (BUZZER_TONE_HZ > 0) { ledcWriteTone(BUZZER_LEDC_CHANNEL, on ? BUZZER_TONE_HZ : 0); return; }
+#endif
+  digitalWrite(BUZZER_PIN, on ? HIGH : LOW);
+}
 void beep(std::initializer_list<uint16_t> pattern) {
   if (BUZZER_PIN < 0 || !buzzerOn) return;
   bool on = true;
-  for (uint16_t ms : pattern) { digitalWrite(BUZZER_PIN, on ? HIGH : LOW); delay(ms); on = !on; }
-  digitalWrite(BUZZER_PIN, LOW);
+  for (uint16_t ms : pattern) { buzzerSet(on); delay(ms); on = !on; }
+  buzzerSet(false);
 }
 void beepFor(View view) {
   switch (view) {
@@ -141,14 +156,46 @@ void beepFor(View view) {
     default: break;
   }
 }
+// Main PCB: status LEDs follow the result on screen; power and case inputs are reported in STATUS.
+void statusLeds(View view) {
+#if defined(BOARD_MAIN)
+  digitalWrite(LED_OK_PIN, view == View::Ok || view == View::Info ? HIGH : LOW);
+  digitalWrite(LED_ERR_PIN, view == View::Error || view == View::Warn ? HIGH : LOW);
+#else
+  (void)view;
+#endif
+}
+String boardStatus() {
+#if defined(BOARD_MAIN)
+  uint32_t battery = analogReadMilliVolts(BAT_SENSE_PIN) * 320UL / 220UL;
+  uint32_t mains = analogReadMilliVolts(MAINS_SENSE_PIN) * 320UL / 220UL;
+  return "; battery_mv=" + String(battery) + "; ext_5v_mv=" + String(mains) + "; ext_power=" + String(mains > 4000) +
+         "; charging=" + String(digitalRead(CHRG_PIN) == LOW) + "; case=" + String(digitalRead(TAMPER_PIN) == LOW ? "closed" : "open") +
+         "; rtc_int=" + String(digitalRead(RTC_INT_PIN) ? "high" : "low");
+#else
+  return "";
+#endif
+}
+void boardBegin() {
+#if defined(BOARD_MAIN)
+  pinMode(TFT_BL_PIN, OUTPUT); digitalWrite(TFT_BL_PIN, LOW);  // backlight on
+  pinMode(LED_OK_PIN, OUTPUT); digitalWrite(LED_OK_PIN, LOW);
+  pinMode(LED_ERR_PIN, OUTPUT); digitalWrite(LED_ERR_PIN, LOW);
+  for (int pin : {TAMPER_PIN, RTC_INT_PIN, CHRG_PIN}) pinMode(pin, INPUT);  // pulled up on the board
+  analogSetPinAttenuation(BAT_SENSE_PIN, ADC_11db);
+  analogSetPinAttenuation(MAINS_SENSE_PIN, ADC_11db);
+#endif
+}
 void show(View view, const String &title = "", const String &line1 = "", const String &line2 = "", uint32_t holdMs = 3000) {
   currentView = view; currentTitle = title; currentLine1 = line1; currentLine2 = line2; enrollView = false;
   viewUntil = view == View::Idle || holdMs == 0 ? 0 : millis() + holdMs;
   if (displayReady) displayShow(view, title, line1, line2, screenStatus());
+  statusLeds(view);
   beepFor(view);  // after drawing, so the screen does not wait for the sound
 }
 void showEnroll(const String &who, const String &prompt, int step) {
   enrollView = true; currentTitle = who; currentLine1 = prompt; enrollStep = step;
+  statusLeds(View::Enroll);
   if (displayReady) displayEnroll(who, prompt, step, screenStatus());
 }
 void redraw() {
@@ -604,17 +651,18 @@ void command(String line) {
     }
   } else if (line == "STATUS") {
     if (sensorReady) finger.getTemplateCount();
-    logMessage("Device " + String(DEVICE_ID) + "; firmware=" + FIRMWARE_VERSION + "; sensor=" + String(sensorReady) +
+    logMessage("Device " + String(DEVICE_ID) + "; firmware=" + FIRMWARE_VERSION + "; hardware=" + HARDWARE_NAME + "; sensor=" + String(sensorReady) +
       "; display=" + displayInfo() + "; buzzer=" + String(BUZZER_PIN < 0 ? "none" : buzzerOn ? "on" : "muted") +
       "; storage=" + String(storageReady) + (storageReady ? fsUsage() : String("")) + "; pending=" + String(pending.size()) + "; staff=" + String(people.size()) +
       "; time=" + clockText() + "; capacity=" + String(finger.capacity) +
       "; templates=" + String(finger.templateCount) + "; rtc=" + String(rtcReady) + "; touch=" + String(touchActive >= 0 ? (touchActive == HIGH ? "high" : "low") : "none") +
-      (FINGER_TOUCH_PIN >= 0 ? "; touch_now=" + String(digitalRead(FINGER_TOUCH_PIN) ? "high" : "low") : String("")) + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
+      (FINGER_TOUCH_PIN >= 0 ? "; touch_now=" + String(digitalRead(FINGER_TOUCH_PIN) ? "high" : "low") : String("")) + boardStatus() + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
       (USE_WIFI ? "; ssid=" + WiFi.SSID() + "; ip=" + WiFi.localIP().toString() + "; server=" + String(serverOk) +
        "; office_wifi=" + (hasOffice() ? officeSsid + " v" + String(wifiVersion) : String("none")) +
        (officeError.length() ? "; office_error=" + officeError : "") : ""));
   } else if (line.startsWith("TFTROT ") || line.startsWith("TFTTAB ")) {
-    // Commissioning: orientation (0-3) and ST7735 variant (0 green, 1 red, 2 black tab), kept across resets.
+    // Commissioning, kept across resets: orientation (0-3) and panel variant
+    // (ST7735: 0 green, 1 red, 2 black tab; ILI9488: 0 normal, 1 inverted colours).
     settings.putUInt(line.startsWith("TFTROT ") ? "tft_rot" : "tft_tab", line.substring(7).toInt());
     displaySetup(settings.getUInt("tft_rot", TFT_ROTATION), settings.getUInt("tft_tab", TFT_TAB));
     redraw();
@@ -673,9 +721,15 @@ void setup() {
   settings.begin("attendance", false);
   if (settings.isKey("wifi_ssid")) { officeSsid = settings.getString("wifi_ssid", ""); officePass = settings.getString("wifi_pass", ""); }
   wifiVersion = settings.getUInt("wifi_ver", 0); resultId = settings.getInt("res_id", 0);
-  if (BUZZER_PIN >= 0) { pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW); }
+  if (BUZZER_PIN >= 0) {
+    pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
+#if !defined(ESP8266)
+    if (BUZZER_TONE_HZ > 0) { ledcSetup(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ, 8); ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CHANNEL); ledcWriteTone(BUZZER_LEDC_CHANNEL, 0); }
+#endif
+  }
   buzzerOn = settings.getUInt("buzzer", 1) != 0;
-  Wire.begin(OLED_SDA, OLED_SCL);
+  boardBegin();
+  Wire.begin(I2C_SDA, I2C_SCL);
   startClock();
   displaySetup(settings.getUInt("tft_rot", TFT_ROTATION), settings.getUInt("tft_tab", TFT_TAB));
   displayReady = displayBegin();

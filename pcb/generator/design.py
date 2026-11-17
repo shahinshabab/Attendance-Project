@@ -84,8 +84,8 @@ block('5 V buck converter (XL1509-5.0, 150 kHz)')
 part('U3', 'attendance:XL1509-5.0E1', 'XL1509-5.0', None, 'C61063',
      {1: 'VIN', 2: 'SW_BUCK', 3: 'BUCK_5V', 4: 'GND', 5: 'GND', 6: 'GND', 7: 'GND', 8: 'GND'})
 SS34('D1', 'GND', 'SW_BUCK')
-part('L1', 'attendance:FNR8040S470MT', '68uH', None, 'C168140', {1: 'SW_BUCK', 2: 'BUCK_5V'},
-     note='FNR8040S680MT, same 8x8 mm footprint as the 47 uH symbol it reuses')
+part('L1', 'attendance:FNR8040S470MT', '33uH', None, 'C168133', {1: 'SW_BUCK', 2: 'BUCK_5V'},
+     note='FNR8040S330MT (2.4 A / 2.0 A, 126 mOhm), same 8x8 mm footprint as the 47 uH symbol it reuses')
 C('C3', '470u', 'BUCK_5V', 'GND')
 C('C4', '22u', 'BUCK_5V', 'GND')
 LM66100('U8', 'BUCK_5V', '+5V', 'GND')
@@ -127,8 +127,8 @@ LED('LED3', 'red', 'LED3_A', 'CHRG_N')
 R('R8', '1k', 'EXT_5V', 'LED4_A')
 LED('LED4', 'green', 'LED4_A', 'STDBY_N')
 R('R9', '100k', 'CHRG_N', '+3V3')
-part('J3', 'attendance:PH2.0-2P-LT', 'LiPo (PH2.0)', None, 'C722761', {1: 'BAT_P', 2: 'BAT_N', 3: 'NC', 4: 'NC'},
-     note='Pin 1 = + : check the battery plug polarity, it varies by seller')
+part('J3', 'attendance:PH2.0-2P-LT', 'LiPo (PH2.0)', None, 'C722761', {1: 'BAT_P', 2: 'BAT_N', 3: 'NC', 4: 'NC'}, dnp=True,
+     note='Back side, hand-soldered. Pin 1 = + : check the battery plug polarity, it varies by seller')
 part('J10', 'Connector_Generic:Conn_01x02', 'LiPo pads', 'Connector_Wire:SolderWire-0.5sqmm_1x02_P4.6mm_D0.9mm_OD2.1mm',
      '', {1: 'BAT_P', 2: 'BAT_N'}, dnp=True, note='Solder pads for a directly wired cell')
 # DW01A: 1 OD, 2 CS/VM, 3 OC, 4 TD, 5 VCC, 6 GND.  FS8205A: 1 S1, 2/5 D, 3 S2, 4 G2, 6 G1.
@@ -192,28 +192,28 @@ part('U2', 'Timer_RTC:DS3231MZ', 'DS3231MZ', 'Package_SO:SOIC-8_3.9x4.9mm_P1.27m
 C('C22', '100n', '+3V3', 'GND')
 C('C23', '100n', 'VBAT_RTC', 'GND')
 part('BT1', 'Device:Battery_Cell', 'CR2032', 'Battery:BatteryHolder_Keystone_3034_1x20mm', 'C5213768',
-     {1: 'VBAT_RTC', 2: 'GND'}, note='No charging path: CR2032 is not rechargeable')
+     {1: 'VBAT_RTC', 2: 'GND'}, dnp=True,
+     note='Back side, hand-soldered. No charging path: CR2032 is not rechargeable')
 R('R24', '10k', '+3V3', 'RTC_INT')
 R('R25', '4.7k', '+3V3', 'I2C_SDA')
 R('R26', '4.7k', '+3V3', 'I2C_SCL')
 part('J8', 'Connector_Generic:Conn_01x04', 'I2C', 'Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical', 'C144395',
      {1: '+3V3', 2: 'GND', 3: 'I2C_SDA', 4: 'I2C_SCL'})
 
-block('Fingerprint sensor (R307 / AS608)')
-part('J4', 'attendance:WAFER-MX1.25-6PLB', 'R307 1.25mm', None, 'C3029354',
-     {1: 'SENSOR_VCC', 2: 'GND', 3: 'SENSOR_TX', 4: 'SENSOR_RX', 5: 'SENSOR_TOUCH', 6: '+3V3', 7: 'NC', 8: 'NC'},
-     note='R307 pinout: 1 +5V, 2 GND, 3 TXD, 4 RXD, 5 touch sense, 6 touch power')
+block('Fingerprint sensor (R307S)')
 part('J11', 'Connector_Generic:Conn_01x06', 'R307 pads', 'Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical', '',
      {1: 'SENSOR_VCC', 2: 'GND', 3: 'SENSOR_TX', 4: 'SENSOR_RX', 5: 'SENSOR_TOUCH', 6: '+3V3'}, dnp=True,
-     note='Solder pads for the loose R307 leads')
+     note='Front side, just above the sensor. R307S: 1 +5V, 2 GND, 3 TXD, 4 RXD, 5 touch out, 6 touch power 3.3 V')
 part('JP2', 'Jumper:SolderJumper_3_Bridged12', 'SENSOR 5V/3V3', 'Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm', '',
      {1: '+5V', 2: 'SENSOR_VCC', 3: '+3V3'}, note='Default 5 V (R307); 3.3 V only for 3.3 V sensors')
 C('C24', '10u', 'SENSOR_VCC', 'GND')
 
-block('1.8" TFT (ST7735) with switchable backlight')
-part('J5', 'Connector_Generic:Conn_01x08', 'TFT VCC GND CS RST A0 SDA SCK LED', 'Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical',
-     'C42431840', {1: '+5V', 2: 'GND', 3: 'TFT_CS', 4: 'TFT_RST', 5: 'TFT_DC', 6: 'TFT_MOSI', 7: 'TFT_SCK', 8: 'TFT_LED'},
-     note='VCC from 5 V: the module has its own 3.3 V regulator')
+block('3.5" TFT (ILI9488, SPI) with switchable backlight')
+part('J5', 'Connector_Generic:Conn_01x14', 'TFT 3.5in ILI9488', 'Connector_PinHeader_2.54mm:PinHeader_1x14_P2.54mm_Vertical',
+     '', {1: '+5V', 2: 'GND', 3: 'TFT_CS', 4: 'TFT_RST', 5: 'TFT_DC', 6: 'TFT_MOSI', 7: 'TFT_SCK', 8: 'TFT_LED',
+          9: 'NC', 10: 'NC', 11: 'NC', 12: 'NC', 13: 'NC', 14: 'NC'}, dnp=True,
+     note='Hand-soldered 1x14 header; a 14-wire jumper cable goes to the module. Module pins: VCC GND CS RESET DC SDI SCK LED '
+          'SDO T_CLK T_CS T_DIN T_DO T_IRQ. SDO and the touch pins are unused. VCC from 5 V: the module has its own regulator')
 part('Q2', 'Transistor_FET:AO3401A', 'AO3401A', 'Package_TO_SOT_SMD:SOT-23', 'C15127',
      {2: '+3V3', 3: 'TFT_LED', 1: 'TFT_BL_G'}, note='Backlight switch: on by default, IO14 high turns it off')
 R('R27', '1k', 'TFT_BL', 'TFT_BL_G')
@@ -221,7 +221,7 @@ R('R28', '100k', 'TFT_BL_G', 'GND')
 
 block('Case tamper switch')
 part('J7', 'Connector_Generic:Conn_01x02', 'TAMPER', 'Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical', 'C158012',
-     {1: 'TAMPER_IN', 2: 'GND'}, note='Case switch, closed when the case is shut')
+     {1: 'TAMPER_IN', 2: 'GND'}, dnp=True, note='Back side, hand-soldered. Case switch, closed when the case is shut')
 R('R30', '10k', '+3V3', 'TAMPER_IN')
 R('R31', '1k', 'TAMPER_IN', 'TAMPER')
 C('C25', '100n', 'TAMPER', 'GND')
@@ -232,9 +232,9 @@ part('BZ1', 'attendance:MLT-8530', 'MLT-8530', None, 'C94599', {1: '+3V3', 4: 'B
 part('D6', 'Device:D', '1N4148W', 'Diode_SMD:D_SOD-123', 'C81598', {1: '+3V3', 2: 'BZ_N'})
 part('Q6', 'Transistor_BJT:MMBT3904', 'MMBT3904', 'Package_TO_SOT_SMD:SOT-23', 'C20526', {1: 'Q6_B', 2: 'GND', 3: 'BZ_N'})
 R('R32', '1k', 'BUZZER', 'Q6_B')
-R('R33', '1k', 'LED_ERR', 'LED1_A')
+R('R33', '470', 'LED_ERR', 'LED1_A')
 LED('LED1', 'red', 'LED1_A', 'GND')
-R('R34', '1k', 'LED_OK', 'LED2_A')
+R('R34', '470', 'LED_OK', 'LED2_A')
 LED('LED2', 'green', 'LED2_A', 'GND')
 
 block('Test points and mounting holes')

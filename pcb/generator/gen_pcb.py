@@ -1,10 +1,17 @@
 """Generate the PCB (placement, outline, rules, zones) from design.py, then optionally autoroute.
 
 Run with KiCad's Python:  <KiCad>/bin/python.exe gen_pcb.py [--route]
-Coordinates below are board millimetres seen from the FRONT (user side): x right, y down,
-board 70 x 110 mm. 'B' parts are on the back (all SMT, assembled by JLCPCB); the front carries
-only the TFT socket and the R307 lead pads. The TFT and R307 themselves sit on the front.
+Coordinates below are board millimetres seen from the FRONT (the side facing the display and
+sensor): x right, y down, board 70 x 150 mm. JLCPCB assembles the FRONT. 'B' parts are hand-soldered
+on the back: only the coin-cell holder (BT1), battery connector (J3) and tamper connector (J7).
+Layout agreed with the enclosure (see /enclosure in the project files):
+  - 3.5" ILI9488 module in front of x 7-63, y 1-99; a 14-wire cable runs from its top header to J5.
+  - ESP32 turned 90 degrees with the antenna at the RIGHT edge, beside the display, not behind it.
+  - SENSOR_ZONE (lower middle) stays empty: the upright R307S sits in front of it. Its cable goes
+    to the J11 pads just above it.
+  - Status LEDs left of the sensor (light holes in the front shell); buzzer by the right-wall slots.
 """
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -13,14 +20,17 @@ import pcbnew
 import footprints
 import symbols
 from design import COMPONENTS
-from gen_schematic import symbol_footprint
+from gen_schematic import symbol_footprint, uid
 
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent / 'attendance-board'
 BOARD_FILE = PROJECT / 'attendance-board.kicad_pcb'
-FREEROUTING = Path.home() / 'AppData/Local/Programs/Freerouting/freerouting-cli.exe'
+# Freerouting 1.9.0 (Java 17). The native freerouting-cli 2.5.0 crashes on this board (GraalVM serialization) and 2.5.0's jar needs Java 25.
+FREEROUTING = Path.home() / 'AppData/Local/Programs/Freerouting/freerouting-1.9.0.jar'
 OX, OY = 100.0, 50.0           # board origin on the KiCad page
-W, H, CORNER = 70.0, 110.0, 3.0
+W, H, CORNER = 70.0, 150.0, 3.0
+SENSOR_ZONE = (17.5, 97.0, 52.5, 150.0)   # x0, y0, x1, y1: no front parts except J11
+U1_POS, U1_ROT = (56.5, 19.0), -90       # antenna (module top) pointing to the right edge
 
 
 def pt(x, y):
@@ -30,59 +40,59 @@ def pt(x, y):
 # ---------------------------------------------------------------- placement (x, y, rotation, side)
 # The centre of each part's real extent (courtyard plus pads) goes to (x, y). U1 is placed by origin.
 PLACE = {
-    # mounting holes
-    'H1': (4, 4, 0, 'F'), 'H2': (66, 4, 0, 'F'), 'H3': (4, 106, 0, 'F'), 'H4': (66, 106, 0, 'F'),
-    # left of ESP32: programming and auto-reset (ESP32 TX/RX/IO0 are on this side when mounted on the back)
-    'J9': (4.5, 19.5, 0, 'B'), 'JP1': (10, 28.5, 0, 'B'),
-    'R22': (10, 12.5, 90, 'B'), 'R23': (12.5, 12.5, 90, 'B'),
-    'R20': (17, 9.5, 0, 'B'), 'Q4': (17, 14, 0, 'B'),
-    'R21': (11, 20.5, 90, 'B'), 'Q5': (17, 20.5, 0, 'B'),
-    'R19': (22, 18.5, 90, 'B'), 'SW2': (19, 26.5, 0, 'B'),
-    'R25': (22, 10.5, 90, 'B'), 'R26': (24, 14, 90, 'B'),
-    # right of ESP32: EN, decoupling, 3.3 V regulator, power LED
-    'C19': (47.5, 9.5, 90, 'B'), 'C20': (50, 9.5, 90, 'B'),
-    'R18': (53, 9.5, 90, 'B'), 'C21': (55.5, 9.5, 90, 'B'), 'SW1': (61, 11.5, 0, 'B'),
-    'C10': (49, 16, 0, 'B'), 'C11': (54, 16.5, 0, 'B'), 'U4': (62, 21, 90, 'B'), 'C9': (67.5, 14.5, 90, 'B'),
-    'R5': (48, 21.5, 90, 'B'), 'LED5': (48, 25.5, 90, 'B'), 'TP3': (53, 22, 0, 'B'),
-    # middle left: RTC with coin cell
-    'BT1': (13.5, 42, 0, 'B'), 'U2': (8.5, 58, 0, 'B'), 'C22': (15, 55.5, 0, 'B'), 'C23': (15, 58.5, 0, 'B'),
-    'R24': (15, 61.5, 0, 'B'),
-    # TFT backlight switch
-    'Q2': (30, 34.5, 0, 'B'), 'R27': (30, 30.5, 0, 'B'), 'R28': (34, 30.5, 0, 'B'),
-    # left edge: I2C and tamper connectors with the tamper pull-up and filter
-    'J8': (4.5, 69, 90, 'B'), 'J7': (4.5, 91.5, 90, 'B'),
-    'R30': (11, 86.5, 90, 'B'), 'R31': (13.5, 86.5, 90, 'B'), 'C25': (16, 86.5, 90, 'B'),
-    # front: TFT socket and R307 lead pads (just above the sensor); sensor connector on the back
-    'J5': (35, 61, 90, 'F'), 'J11': (35, 66.5, 90, 'F'),
-    'J4': (35, 71.5, 0, 'B'), 'JP2': (25, 75, 0, 'B'), 'C24': (44, 75, 0, 'B'),
-    # status LEDs
-    'LED1': (19, 79.5, 90, 'B'), 'R33': (19, 83.5, 90, 'B'), 'LED2': (22, 79.5, 90, 'B'), 'R34': (22, 83.5, 90, 'B'),
-    'TP4': (16, 75, 0, 'B'),
-    # battery: charger, protection, boost, switch-over (right middle)
-    'J3': (65, 31, 90, 'B'), 'J10': (66.5, 46, 90, 'B'), 'TP5': (63, 41, 0, 'B'),
-    'C12': (40, 30, 0, 'B'), 'C13': (40, 33, 0, 'B'), 'U5': (46.5, 32.5, 0, 'B'), 'R6': (46.5, 37.5, 0, 'B'),
-    'R7': (39, 39, 0, 'B'), 'LED3': (43, 39, 0, 'B'), 'R8': (39, 42, 0, 'B'), 'LED4': (43, 42, 0, 'B'),
-    'R9': (47.5, 41, 90, 'B'),
-    'R10': (55, 31, 0, 'B'), 'U6': (55, 35, 0, 'B'), 'C14': (51.5, 35, 90, 'B'), 'R11': (55, 39, 0, 'B'),
-    'Q3': (59, 39, 0, 'B'),
-    'U7': (55, 47.5, 0, 'B'), 'L2': (60, 47.5, 0, 'B'), 'R12': (51, 46, 0, 'B'), 'R13': (51, 49, 0, 'B'),
-    'C15': (60, 53, 0, 'B'), 'C16': (55.5, 52, 90, 'B'), 'C17': (53, 52, 90, 'B'), 'U9': (48.5, 52.5, 0, 'B'),
-    'R16': (64, 53, 90, 'B'), 'R17': (66.5, 53, 90, 'B'), 'C18': (66.5, 57.5, 90, 'B'),
-    # buzzer group (right, below the battery block)
-    'BZ1': (62.5, 66, 0, 'B'), 'Q6': (54.5, 63, 0, 'B'), 'R32': (54.5, 66.5, 0, 'B'), 'D6': (54.5, 70, 0, 'B'),
-    'TP2': (49, 70, 0, 'B'),
-    # 5 V rail, external-power OR and sense (lower right)
-    'C7': (57, 85, 0, 'B'), 'C8': (52, 85, 90, 'B'),
-    'D4': (47, 80, 0, 'B'), 'D5': (57, 80, 0, 'B'), 'C6': (64, 80, 90, 'B'),
-    'R14': (62.5, 87, 90, 'B'), 'R15': (65, 87, 90, 'B'),
-    'U8': (47, 106, 0, 'B'), 'U10': (63.5, 99.5, 0, 'B'),
-    'J2': (55, 106.5, 0, 'B'), 'R2': (53.5, 100, 90, 'B'), 'R3': (56, 100, 90, 'B'), 'C5': (60.5, 100, 90, 'B'),
-    # 12 V input and buck converter (bottom left)
-    'J1': (21, 103, 0, 'B'), 'F1': (10, 100.5, 90, 'B'), 'Q1': (13, 94, 0, 'B'), 'R1': (13, 90.5, 0, 'B'),
-    'D2': (18, 92, 0, 'B'), 'D3': (24.8, 92, 0, 'B'), 'TP1': (28, 97.5, 0, 'B'),
-    'C1': (35, 83, 0, 'B'), 'C2': (30, 93, 90, 'B'),
-    'U3': (34, 93, 0, 'B'), 'D1': (39.5, 95, 90, 'B'), 'L1': (47, 95, 0, 'B'),
-    'C3': (35.5, 104.5, 0, 'B'), 'C4': (46, 101.5, 0, 'B'),
+    # mounting holes (case bosses at the corners)
+    'H1': (4, 4, 0, 'F'), 'H2': (66, 4, 0, 'F'), 'H3': (4, 146, 0, 'F'), 'H4': (66, 146, 0, 'F'),
+    # top left: programming header, auto-reset, BOOT/RESET, I2C pull-ups
+    'J9': (4.5, 19.5, 0, 'F'), 'JP1': (10, 28.5, 0, 'F'),
+    'R22': (10, 12.5, 90, 'F'), 'R23': (12.5, 12.5, 90, 'F'),
+    'R20': (17, 9.5, 0, 'F'), 'Q4': (17, 14, 0, 'F'),
+    'R21': (11, 20.5, 90, 'F'), 'Q5': (17, 20.5, 0, 'F'),
+    'R19': (22, 18.5, 90, 'F'), 'SW2': (19, 26.5, 0, 'F'), 'SW1': (27.5, 26.5, 0, 'F'),
+    'R25': (22, 10.5, 90, 'F'), 'R26': (24.5, 14, 90, 'F'),
+    'R5': (29, 6.5, 0, 'F'), 'LED5': (33, 6.5, 0, 'F'),
+    # 3.3 V regulator left of the ESP32; EN RC and decoupling along the module's pin-1 side
+    'C9': (39, 9.5, 0, 'F'), 'U4': (38, 17, 0, 'F'), 'C10': (32, 17, 90, 'F'), 'C11': (39, 24.5, 0, 'F'),
+    'C19': (60.5, 6.5, 90, 'F'), 'C20': (58, 6.5, 90, 'F'), 'R18': (55.5, 6.5, 90, 'F'), 'C21': (53, 6.5, 90, 'F'),
+    'TP3': (48, 6.5, 0, 'F'),
+    # display header (cable to the module) and backlight switch
+    'J5': (35, 33, 90, 'F'),
+    'Q2': (12, 34, 0, 'F'), 'R27': (12, 38, 0, 'F'), 'R28': (8, 34, 90, 'F'),
+    # left edge: I2C expansion, tamper connector (back) and its filter
+    'J8': (4.5, 50, 90, 'F'), 'J7': (4.5, 64, 90, 'B'),
+    'R30': (11, 62, 90, 'F'), 'R31': (13.5, 62, 90, 'F'), 'C25': (16, 62, 90, 'F'),
+    # RTC (coin cell on the back, lower middle, above the sensor pads)
+    'U2': (27, 64, 0, 'F'), 'C22': (22, 62, 90, 'F'), 'C23': (32, 64, 90, 'F'), 'R24': (21.5, 67, 0, 'F'),
+    'BT1': (35, 86.5, 0, 'B'),
+    # battery: charger, protection, boost, switch-over (right, below the ESP32); connector on the back
+    'J3': (58.8, 44, 90, 'B'), 'J10': (66.5, 55, 90, 'F'), 'TP5': (63, 50, 0, 'F'),
+    'C12': (40, 39, 0, 'F'), 'C13': (40, 42, 0, 'F'), 'U5': (46.5, 41.5, 0, 'F'), 'R6': (46.5, 46.5, 0, 'F'),
+    'R7': (39, 48, 0, 'F'), 'LED3': (43, 48, 0, 'F'), 'R8': (39, 51, 0, 'F'), 'LED4': (43, 51, 0, 'F'),
+    'R9': (47.5, 50, 90, 'F'),
+    'R10': (55, 40, 0, 'F'), 'U6': (55, 44, 0, 'F'), 'C14': (51.5, 44, 90, 'F'), 'R11': (55, 48, 0, 'F'),
+    'Q3': (59, 48, 0, 'F'),
+    'U7': (55, 56.5, 0, 'F'), 'L2': (60, 56.5, 0, 'F'), 'R12': (51, 55, 0, 'F'), 'R13': (51, 58, 0, 'F'),
+    'C15': (60, 62, 0, 'F'), 'C16': (55.5, 61, 90, 'F'), 'C17': (53, 61, 90, 'F'), 'U9': (48.5, 61.5, 0, 'F'),
+    'R16': (64, 62, 90, 'F'), 'R17': (66.5, 62, 90, 'F'), 'C18': (66.5, 66.5, 90, 'F'),
+    # 12 V input protection and 5 V buck (middle band, under the lower part of the display)
+    'C1': (9, 78, 0, 'F'), 'D3': (9, 88, 0, 'F'), 'F1': (9, 94, 0, 'F'),
+    'Q1': (16.5, 88, 0, 'F'), 'R1': (16.5, 92.5, 0, 'F'), 'D2': (21.5, 88, 0, 'F'), 'C2': (21.5, 92.5, 0, 'F'),
+    'TP1': (25, 92.5, 0, 'F'),
+    'U3': (24, 79, 0, 'F'), 'D1': (31, 79, 90, 'F'), 'L1': (40, 79, 0, 'F'), 'C4': (31, 86, 90, 'F'),
+    'C3': (40, 90.5, 0, 'F'), 'U8': (49, 86, 0, 'F'),
+    # 5 V rail, external-power OR and mains sense (middle band, right)
+    'C7': (51.5, 76, 0, 'F'), 'C8': (52, 80.5, 0, 'F'), 'TP2': (53, 85, 0, 'F'),
+    'D4': (58, 75, 0, 'F'), 'D5': (58, 80, 0, 'F'), 'C6': (64, 77.5, 90, 'F'),
+    'R14': (63, 84, 90, 'F'), 'R15': (65.5, 84, 90, 'F'),
+    # sensor pads just above the sensor, supply jumper and its capacitor
+    'J11': (35, 99.7, 90, 'F'), 'JP2': (24, 95.5, 0, 'F'), 'C24': (48.5, 95.5, 0, 'F'),
+    # left of the sensor: status LEDs behind the light holes, GND test point; 12 V jack at the bottom
+    'LED1': (12, 118, 90, 'F'), 'LED2': (15, 118, 90, 'F'), 'R33': (12, 113.5, 90, 'F'), 'R34': (15, 113.5, 90, 'F'),
+    'TP4': (5, 113, 0, 'F'),
+    'J1': (12.6, 143, 0, 'F'),
+    # right of the sensor: buzzer by the sound slots, USB-C at the bottom
+    'BZ1': (62, 105, 0, 'F'), 'Q6': (57.5, 114, 0, 'F'), 'R32': (62, 114, 0, 'F'), 'D6': (65.5, 118, 0, 'F'),
+    'U10': (66, 134, 0, 'F'),
+    'J2': (57.4, 146.5, 0, 'F'), 'R2': (57, 139.5, 90, 'F'), 'R3': (59.5, 139.5, 90, 'F'), 'C5': (62, 139.5, 90, 'F'),
 }
 
 POWER = ['+5V', '+3V3', 'BAT_P', 'BAT_N', 'BOOST_5V', 'BOOST_SW', 'USB_5V', 'EXT_5V', 'SENSOR_VCC', 'TFT_LED', 'FET_DRAIN', 'VBAT_RTC']
@@ -119,7 +129,7 @@ def repair_footprint(ref, fp):
         if pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
             continue
         drill = pcbnew.ToMM(min(pad.GetDrillSize().x, pad.GetDrillSize().y))
-        if drill < 0.05:
+        if drill < 0.05 or (ref != 'U1' and drill < 0.3):
             pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
             pad.SetDrillSize(pcbnew.VECTOR2I(0, 0))
             pad.SetLayerSet(pcbnew.PAD.SMDMask())
@@ -175,7 +185,11 @@ def check_overlaps(board):
     bx0, by0, bx1, by1 = pt(0, 0).x, pt(0, 0).y, pt(W, H).x, pt(W, H).y
     edge = [ref for ref, _, x0, y0, x1, y1 in boxes
             if ref not in ('J1', 'J2', 'U1') and (x0 < bx0 or y0 < by0 or x1 > bx1 or y1 > by1)]
+    zx0, zy0, zx1, zy1 = pt(SENSOR_ZONE[0], SENSOR_ZONE[1]).x, pt(SENSOR_ZONE[0], SENSOR_ZONE[1]).y, pt(SENSOR_ZONE[2], SENSOR_ZONE[3]).x, pt(SENSOR_ZONE[2], SENSOR_ZONE[3]).y
+    in_zone = [ref for ref, sides, x0, y0, x1, y1 in boxes
+               if ref != 'J11' and 'F' in sides and x0 < zx1 and zx0 < x1 and y0 < zy1 and zy0 < y1]
     print('OVERLAPS:', ' '.join(found) if found else 'none')
+    print('IN SENSOR ZONE:', ' '.join(in_zone) if in_zone else 'none')
     print('OFF BOARD:', ' '.join(edge) if edge else 'none')
     return found
 
@@ -222,10 +236,35 @@ def add_gnd_zone(board, net, layer):
         outline.Append(pt(x, y))
     zone.SetLocalClearance(pcbnew.FromMM(0.25))
     zone.SetMinThickness(pcbnew.FromMM(0.25))
-    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)   # SMD pads solid, through-holes with reliefs
     zone.SetThermalReliefGap(pcbnew.FromMM(0.3))
     zone.SetThermalReliefSpokeWidth(pcbnew.FromMM(0.4))
     board.Add(zone)
+
+
+def net_name(net):
+    """Schematic nets come from local labels on the root sheet, which KiCad names '/<label>'."""
+    return '/' + net
+
+
+def sync_project_rules():
+    """kicad-cli DRC reads rules and net classes from the .kicad_pro, not the board: keep them equal."""
+    pro = PROJECT / 'attendance-board.kicad_pro'
+    data = json.loads(pro.read_text(encoding='utf-8'))
+    rules = data['board']['design_settings']['rules']
+    rules.update(min_track_width=0.15, min_clearance=0.15, min_copper_edge_clearance=0.3,
+                 min_via_diameter=0.5, min_through_hole_diameter=0.3)
+    data['board']['design_settings']['defaults']['zones']['min_clearance'] = 0.25
+    ns = data['net_settings']
+    template = next(c for c in ns['classes'] if c['name'] == 'Default')
+    classes = [dict(template, track_width=0.25, clearance=0.15, via_diameter=0.6, via_drill=0.3)]
+    for i, (name, width, via, drill) in enumerate([('Power', 0.4, 0.7, 0.35), ('HighCurrent', 0.8, 0.8, 0.4)]):
+        classes.append(dict(template, name=name, track_width=width, clearance=0.15, via_diameter=via, via_drill=drill, priority=i))
+    ns['classes'] = classes
+    ns['netclass_patterns'] = ([{'netclass': 'Power', 'pattern': net_name(n)} for n in POWER]
+                               + [{'netclass': 'HighCurrent', 'pattern': net_name(n)} for n in HIGH_CURRENT])
+    ns['netclass_assignments'] = {}
+    pro.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
 
 
 def configure_rules(board):
@@ -245,7 +284,7 @@ def configure_rules(board):
         nc.SetViaDiameter(pcbnew.FromMM(via)); nc.SetViaDrill(pcbnew.FromMM(via_drill))
         ns.SetNetclass(name, nc)
         for net in nets:
-            ns.SetNetclassPatternAssignment(net, name)
+            ns.SetNetclassPatternAssignment(net_name(net), name)
     ns.RecomputeEffectiveNetclasses()
 
 
@@ -257,20 +296,24 @@ def build():
     for comp in COMPONENTS.values():
         for net in comp['pins'].values():
             if net != 'NC' and net not in nets:
-                nets[net] = pcbnew.NETINFO_ITEM(board, net)
+                nets[net] = pcbnew.NETINFO_ITEM(board, net_name(net))
                 board.Add(nets[net])
 
     unplaced, unmatched = [], []
     for ref, comp in COMPONENTS.items():
         fp = footprints.load(footprint_id(comp))
         fp.SetParent(board)
+        lib, name = footprint_id(comp).split(':', 1)
+        fp.SetFPID(pcbnew.LIB_ID(lib, name))
+        fp.SetPath(pcbnew.KIID_PATH('/' + uid('sym', ref)))
         repair_footprint(ref, fp)
         fp.SetReference(ref)
         fp.SetValue(comp['value'])
-        if comp['lcsc']:
-            field = pcbnew.PCB_FIELD(fp, fp.GetNextFieldOrdinal(), 'LCSC')
-            field.SetText(comp['lcsc']); field.SetVisible(False); field.SetLayer(pcbnew.F_Fab)
-            fp.Add(field)
+        for name, text in (('LCSC', comp['lcsc'] or ''), ('Note', comp['note'])):
+            if name == 'LCSC' or text:   # same fields as the schematic symbol (schematic parity)
+                field = pcbnew.PCB_FIELD(fp, fp.GetNextFieldOrdinal(), name)
+                field.SetText(text); field.SetVisible(False); field.SetLayer(pcbnew.F_Fab)
+                fp.Add(field)
         attrs = fp.GetAttributes()
         if comp['dnp']:
             attrs |= pcbnew.FP_DNP
@@ -282,13 +325,20 @@ def build():
             net = comp['pins'].get(number)
             if net and net != 'NC':
                 pad.SetNet(nets[net])
+            elif net == 'NC':   # KiCad's name for a pin with a no-connect flag
+                pin_name = {p['number']: p['name'] for p in symbols.pins(symbols.load(comp['symbol']))}.get(number, '~')
+                key = f'unconnected-({ref}-Pad{number})' if pin_name in ('', '~', number) else f'unconnected-({ref}-{pin_name}-Pad{number})'
+                if key not in nets:
+                    nets[key] = pcbnew.NETINFO_ITEM(board, key)
+                    board.Add(nets[key])
+                pad.SetNet(nets[key])
             elif number and net is None and pad.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH:
                 unmatched.append(f'{ref}.{number}')
         board.Add(fp)
         if ref == 'U1':
             tighten_esp32_courtyard(fp)
-            fp.SetPosition(pt(35, 13.3))   # module top edge at y = 0.5: antenna at the board edge
-            fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+            fp.SetPosition(pt(*U1_POS))
+            fp.SetOrientationDegrees(U1_ROT)   # antenna end 0.5 mm inside the right edge
             continue
         if ref not in PLACE:
             unplaced.append(ref)
@@ -306,16 +356,21 @@ def build():
 
     check_overlaps(board)
     add_edge_cuts(board)
-    # Front silkscreen: where the TFT and R307 sit, so the enclosure can follow the board.
-    add_outline(board, 17.5, 8.0, 52.5, 64.0, pcbnew.F_SilkS)
-    add_text(board, '1.8in TFT (header at bottom)', 35, 36, pcbnew.F_SilkS)
-    add_outline(board, 7.0, 68.0, 63.0, 90.0, pcbnew.F_SilkS)
-    add_text(board, 'R307 fingerprint sensor', 35, 79, pcbnew.F_SilkS)
-    add_text(board, 'ATTENDANCE BOARD v0.1  2026-11', 35, 107.5, pcbnew.B_SilkS, 1.0, mirrored=True)
-    add_text(board, 'LiPo +', 65, 25.5, pcbnew.B_SilkS, 0.9, mirrored=True)
+    # Front silkscreen: where the display and sensor sit, so the enclosure can follow the board.
+    add_outline(board, 7.0, 1.0, 63.0, 99.0, pcbnew.F_SilkS)
+    add_text(board, '3.5in ILI9488 module (cable to J5)', 25, 45, pcbnew.F_SilkS)
+    add_outline(board, 22.0, 104.0, 48.0, 147.0, pcbnew.F_SilkS)
+    add_text(board, 'R307S: keep clear', 35, 125, pcbnew.F_SilkS)
+    add_text(board, 'J11: 5V GND TX RX TCH 3V3', 35, 102.5, pcbnew.F_SilkS, 1.0)
+    add_text(board, 'ATTENDANCE BOARD v0.2  2026-11', 35, 120, pcbnew.B_SilkS, 1.0, mirrored=True)
+    add_text(board, 'LiPo +', 58.8, 37.5, pcbnew.B_SilkS, 0.9, mirrored=True)
+    add_text(board, 'TAMPER', 4.5, 58.5, pcbnew.B_SilkS, 0.9, mirrored=True)
+    # H2 is inside the antenna keep-out (fixed case boss): a metal screw there would detune the antenna.
+    add_text(board, 'H2: nylon screw (antenna)', 52, 2.2, pcbnew.B_SilkS, 0.8, mirrored=True)
     add_gnd_zone(board, nets['GND'], pcbnew.F_Cu)
     add_gnd_zone(board, nets['GND'], pcbnew.B_Cu)
     pcbnew.SaveBoard(str(BOARD_FILE), board)
+    sync_project_rules()
     print(f'Wrote {BOARD_FILE.name}: {len(COMPONENTS)} footprints, {len(nets)} nets')
     if unplaced:
         print('NOT PLACED:', ' '.join(unplaced))
@@ -324,17 +379,105 @@ def build():
     return board
 
 
-def route(board):
+def unrouted(board):
+    board.BuildConnectivity()
+    return board.GetConnectivity().GetUnconnectedCount(False)
+
+
+def route(board, attempts=3):
+    """Freerouting with GND routed as an ordinary net (the pours are removed for routing and added back
+    afterwards, so ground never depends on pour islands). Passes repeat on the routed board until every
+    connection is made."""
+    gnd = board.FindNet(net_name('GND'))
+    for zone in list(board.Zones()):
+        if not zone.GetIsRuleArea():
+            board.Remove(zone)
     dsn, ses = PROJECT / 'attendance-board.dsn', PROJECT / 'attendance-board.ses'
-    if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
-        raise RuntimeError('DSN export failed')
-    print('Routing with Freerouting...')
-    subprocess.run([str(FREEROUTING), '-de', str(dsn), '-do', str(ses), '-mp', '40'], check=True)
-    if not pcbnew.ImportSpecctraSES(board, str(ses)):
-        raise RuntimeError('SES import failed')
+    for attempt in range(1, attempts + 1):
+        if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
+            raise RuntimeError('DSN export failed')
+        print(f'Routing with Freerouting (pass {attempt})...')
+        command = ['java', '-jar', str(FREEROUTING), '-de', str(dsn), '-do', str(ses), '-mp', '40']
+        try:  # route optimisation sometimes runs away; fall back to the plain autorouter result
+            subprocess.run(command, check=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            print('Optimisation took too long; routing again without it')
+            subprocess.run(command + ['-mt', '0'], check=True, timeout=600)
+        if not pcbnew.ImportSpecctraSES(board, str(ses)):
+            raise RuntimeError('SES import failed')
+        left = unrouted(board)
+        print(f'Unrouted connections: {left}')
+        if not left:
+            break
+    add_gnd_zone(board, gnd, pcbnew.F_Cu)
+    add_gnd_zone(board, gnd, pcbnew.B_Cu)
+
+
+def stitch_ground(board, pitch=5.0):
+    """GND vias where both ground pours are present: a grid across the board, plus one next to every
+    GND SMD pad, so no pour island is left floating. Vias go only where the filled copper already keeps
+    clearance from every other net (the fills also exclude the antenna keep-out)."""
+    filler = pcbnew.ZONE_FILLER(board)
+    filler.Fill(board.Zones())
+    gnd = board.FindNet(net_name('GND'))
+    fills = {z.GetLayer(): z.GetFilledPolysList(z.GetLayer()) for z in board.Zones() if z.GetNetname() == gnd.GetNetname()}
+    radius = pcbnew.FromMM(0.3 + 0.05)
+    vias = [v.GetPosition() for v in board.GetTracks() if isinstance(v, pcbnew.PCB_VIA)]
+
+    def fits(p):
+        ring = [pcbnew.VECTOR2I(p.x + int(radius * dx), p.y + int(radius * dy))
+                for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, 0.7), (0.7, -0.7), (-0.7, -0.7)]]
+        return all(poly.Contains(q) for poly in fills.values() for q in ring)
+
+    def near_via(p, mm):
+        limit = pcbnew.FromMM(mm) ** 2
+        return any((v.x - p.x) ** 2 + (v.y - p.y) ** 2 < limit for v in vias)
+
+    def add(p):
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(p); via.SetWidth(pcbnew.FromMM(0.6)); via.SetDrill(pcbnew.FromMM(0.3)); via.SetNet(gnd)
+        board.Add(via); vias.append(p)
+
+    added = 0
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() != gnd.GetNetname() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            c = pad.GetPosition()
+            if near_via(c, 2.5):
+                continue
+            for r in (1.0, 1.4, 1.8, 2.3):
+                options = [pcbnew.VECTOR2I(c.x + int(pcbnew.FromMM(r) * dx), c.y + int(pcbnew.FromMM(r) * dy))
+                           for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0), (0.7, 0.7), (-0.7, 0.7), (0.7, -0.7), (-0.7, -0.7)]]
+                hit = next((q for q in options if not near_via(q, 1.0) and fits(q)), None)
+                if hit:
+                    add(hit); added += 1
+                    break
+    steps_x, steps_y = int(W // pitch), int(H // pitch)
+    for i in range(1, steps_x + 1):
+        for j in range(1, steps_y + 1):
+            p = pt(i * pitch - pitch / 2, j * pitch - pitch / 2)
+            if not near_via(p, pitch * 0.6) and fits(p):
+                add(p); added += 1
+    # Any pour island still without a via: search it on a fine grid for a spot both pours cover.
+    filler.Fill(board.Zones())
+    fills = {z.GetLayer(): z.GetFilledPolysList(z.GetLayer()) for z in board.Zones() if z.GetNetname() == gnd.GetNetname()}
+    step = pcbnew.FromMM(0.4)
+    for layer, poly in fills.items():
+        for k in range(poly.OutlineCount()):
+            island = pcbnew.SHAPE_POLY_SET(); island.AddOutline(poly.Outline(k))
+            if any(island.Contains(v) for v in vias):
+                continue
+            box = poly.Outline(k).BBox()
+            spot = next((q for y in range(box.GetY(), box.GetBottom(), step) for x in range(box.GetX(), box.GetRight(), step)
+                         for q in [pcbnew.VECTOR2I(x, y)] if island.Contains(q) and not near_via(q, 1.0) and fits(q)), None)
+            if spot:
+                add(spot); added += 1
+    print(f'Ground stitching: {added} vias')
 
 
 def finish(board):
+    stitch_ground(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     pcbnew.SaveBoard(str(BOARD_FILE), board)
     print('Zones filled and board saved')

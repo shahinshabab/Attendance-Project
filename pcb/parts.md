@@ -10,9 +10,9 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | --- | --- | --- | --- | --- | ---: | ---: | --- |
 | MCU | U1 | ESP32-WROOM-32E-N4 (4 MB) | C701341 | Extended | 60,757 | 3.77 | Current module, chip rev 3 (Secure Boot V2 capable); same footprint as WROOM-32 |
 | Clock | U2 | DS3231MZ+TRL (SOIC-8, ±5 ppm) | C107410 | Extended | 10,325 | 3.35 | In KiCad's library; the SOIC-16 DS3231SN costs $9–11 for ±2 ppm the server corrects anyway |
-| Clock | BT1 | Keystone 3034 CR2032 holder | C5213768 | Extended | 776 | 0.39 | Replaces CR2032-BS-6-1 (C70377), which has no EasyEDA footprint data; KiCad has the exact Keystone 3034 footprint |
+| Clock | BT1 | Keystone 3034 CR2032 holder | C5213768 | Hand-soldered (back) | 776 | 0.39 | Replaces CR2032-BS-6-1 (C70377), which has no EasyEDA footprint data; KiCad has the exact Keystone 3034 footprint |
 | 5 V buck | U3 | XL1509-5.0E1 (40 V in, 2 A, fixed 5 V) | C61063 | **Basic** | 426,392 | 0.25 | No feedback divider; Basic part |
-| 5 V buck | L1 | FNR8040S680MT 68 µH, 8 × 8 mm | C168140 | Extended | 4,472 | 0.12 | 68 µH per the XL1509 datasheet's 12 V → 5 V example; check saturation current ≥ 1.5 A before ordering |
+| 5 V buck | L1 | FNR8040S330MT 33 µH, 8 × 8 mm | C168133 | Extended | 2,587 | 0.12 | JLCPCB lists 2.4 A / 2.0 A, 126 mΩ (checked 2026-11-16); the 68 µH FNR8040S680MT (C168140) is only 1.4 A / 1.6 A |
 | 5 V buck | D1 | SS34 Schottky (catch diode) | C8678 | **Basic** | 3,180,122 | 0.04 | |
 | 3.3 V | U4 | AMS1117-3.3 (1 A, SOT-223) | C6186 | **Basic** | 1,720,437 | 0.21 | |
 | Input | Q1 | AO3401A P-MOSFET (reverse polarity) | C15127 | **Basic** | 1,677,808 | 0.10 | |
@@ -29,7 +29,7 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | Battery | U7 | TPS61023DRLR 5 V boost (SOT-563) | C919459 | Extended | 39,356 | 0.23 | Higher efficiency than MT3608; feedback 220 k / 30 k = 4.96 V (both Basic) |
 | Battery | L2 | PRS4018-1R0NT 1 µH, 4 × 4 mm | C96152 | Extended | 2,999 | 0.06 | Check saturation current ≥ 3 A in the schematic stage |
 | Battery | U8, U9 | LM66100DCKR ideal diode (×2: EXT 5 V and boost) | C2869734 | Extended | 11,069 | 0.21 | |
-| Battery | J3 | JST-PH 2.0 2-pin SMD (+ 2 solder pads) | C722761 | Extended | 43,845 | 0.04 | |
+| Battery | J3 | JST-PH 2.0 2-pin SMD (+ 2 solder pads) | C722761 | Hand-soldered (back) | 43,845 | 0.04 | Back side, not assembled by JLCPCB |
 | Program | Q4, Q5 | MMBT3904 NPN (auto-program) | C20526 | **Basic** | 2,851,963 | 0.01 | |
 | Feedback | Q6 | MMBT3904 NPN (buzzer driver) | C20526 | **Basic** | — | — | Same part |
 | Feedback | BZ1 | MLT-8530 SMD buzzer 8.5 × 8.5 mm | C94599 | Extended | 141,271 | 0.20 | Pads 1 (+) and 4 (−) per datasheet; pads 2/3 are dummies |
@@ -37,9 +37,9 @@ Real JLCPCB/LCSC parts for every block in [README.md](README.md). Stock and unit
 | Feedback | LED1 | Red 0805 (error, charging) | C84256 | **Basic** | 2,370,309 | 0.01 | |
 | Feedback | LED2 | Green 0805 (OK, power) | C84260 | Extended | 494,742 | 0.02 | |
 | Buttons | SW1, SW2 | TS-1187A tactile switch (RESET, BOOT) | C318884 | **Basic** | 1,044,364 | 0.02 | |
-| Sensor | J4 | MX1.25 6-pin SMD socket (+ 6 solder pads) | C3029354 | Extended | 4,023 | 0.10 | For R307/AS608 cables |
-| Display | J5 | 1 × 8 female header, 2.54 mm | C42431840 | Extended | 11,111 | 0.11 | Through-hole; TFT plugs in directly |
-| Tamper | J7 | JST B2B-XH-A 2-pin | C158012 | Extended | 608,675 | 0.04 | Through-hole. (J6, the IN/OUT button connector, was removed on 2026-11-15) |
+| Sensor | J4 | ~~MX1.25 6-pin SMD socket~~ | — | removed | — | — | Removed 2026-11-16: the R307S cable goes to the front pads J11 (hand-soldered) |
+| Display | J5 | 1 × 14 pin header, 2.54 mm | — | Hand-soldered | — | — | 2026-11-16: 3.5" ILI9488 SPI module on a 14-wire jumper cable; pins 1–8 as before, 9–14 unused |
+| Tamper | J7 | JST B2B-XH-A 2-pin | C158012 | Hand-soldered (back) | 608,675 | 0.04 | Through-hole. (J6, the IN/OUT button connector, was removed on 2026-11-15) |
 | I²C | J8 | JST B4B-XH-A 4-pin | C144395 | Extended | 666,320 | 0.06 | Through-hole |
 | Program | J9 | 1 × 6 pin header, 2.54 mm | — | DNP | — | — | Left unfitted; hand-solder if needed |
 
@@ -78,6 +78,12 @@ Ways to cut cost later:
 - Hand-solder the through-hole connectors.
 - Replace Extended passives with Basic equivalents where the schematic allows.
 - Order more boards at once, so the fixed fees are shared.
+
+## Still to verify before ordering (2026-11-16 review)
+
+- **L1 (resolved 2026-11-16):** the 68 µH FNR8040S680MT was only 1.4 A / 1.6 A for a buck that can see about 1.3 A peak (system load plus 0.5 A battery charging). Now FNR8040S330MT 33 µH (C168133), 2.4 A / 2.0 A, same footprint; 33 µH also suits the XL1509 at 12 V in. Confirm which figure is Isat in the datasheet before ordering.
+- **H2 sits inside the ESP32 antenna keep-out** (the module's rule area reaches 24 mm above and below the antenna, and H2 is the top-right case screw). It stays because the case boss is fixed there: **use a nylon screw at H2**, never metal. DRC reports this as its only two errors (items_not_allowed for H2); they are accepted.
+- **MLT-8530 buzzer** is a passive transducer: the firmware now plays a 2.7 kHz tone (`BUZZER_TONE_HZ`). It stays on 3.3 V because it is rated for about 3.6 V.
 
 ## Still to verify in the schematic stage
 

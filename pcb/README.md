@@ -2,6 +2,8 @@
 
 This folder will hold the custom main board for the office fingerprint attendance scanner. The aim is one PCB that JLCPCB manufactures **and assembles**. You plug the fingerprint sensor, display and button into it, mount it in the enclosure, and it runs the existing firmware with no pin changes.
 
+**2026-11-16 update:** the layout follows the agreed enclosure: board **70 × 150 mm**, all assembled parts on the **front** (facing the display and sensor), only BT1, J3 and J7 hand-soldered on the back, ESP32 antenna at the **right edge** beside the display, R307S cable to the front pads J11, and a **3.5″ ILI9488 SPI module** on a 14-pin header (J5). Sections below that still say 70 × 110 mm, back-side assembly or 1.8″ TFT describe the earlier plan. JLCPCB files: `generator/gen_production.py`.
+
 **Status (2026-11-03):**
 
 | Stage | State |
