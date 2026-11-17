@@ -17,6 +17,11 @@ LCSC C701341, or the same module from robu.in).
 
 JLCPCB places everything else, including the through-hole DC jack J1 and the XH connector J8.
 
+`bom-with-esp32.csv` / `cpl-with-esp32.csv` add U1 to the JLCPCB order. JLCPCB lists U1 (C701341) as
+**Standard-only**, so expect the quote page to refuse it on Economic or switch the order to Standard PCBA
+(about $163 for 5 boards instead of about $102 + the module). If it does, use `bom.csv` / `cpl.csv` and solder
+U1 yourself. The ground-pad holes do no harm when JLCPCB places the module.
+
 ## Files
 
 | Path | What |

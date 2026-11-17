@@ -5,6 +5,8 @@ Run with KiCad's Python after gen_schematic.py, gen_pcb.py --route and a clean D
 Writes pcb/jlcpcb-economic/production/ (git-ignored):
   attendance-board-economic-gerbers.zip
   bom.csv, cpl.csv     every part JLCPCB places (Economic PCBA, top side)
+  bom-with-esp32.csv, cpl-with-esp32.csv   the same plus U1. U1 (C701341) is Standard-only at JLCPCB, so this
+                       set only works if JLCPCB accepts it on Economic, or on a Standard PCBA order
   hand-solder.csv      what you solder yourself: U1 ESP32, the back-side parts and the headers
 Only FRONT-side parts with an LCSC number that are not DNP go in the BOM and CPL; BT1, J3 and J7
 (back side) and the headers J5/J9/J11 are hand-soldered.
@@ -32,8 +34,8 @@ LAYERS = 'F.Cu,B.Cu,F.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts'
 ROTATION_FIX = {}
 
 
-def assembled(comp, with_small_chips=False):
-    return comp['assembly'] == 'jlc'
+def assembled(comp, with_esp32=False):
+    return comp['assembly'] == 'jlc' or (with_esp32 and comp['ref'] == 'U1')
 
 
 def export_gerbers():
@@ -50,13 +52,13 @@ def export_gerbers():
     return zip_path
 
 
-def export_bom_cpl(with_small_chips=False):
+def export_bom_cpl(with_esp32=False):
     board = pcbnew.LoadBoard(str(BOARD_FILE))
     fps = {fp.GetReference(): fp for fp in board.GetFootprints()}
     groups, rows, problems = OrderedDict(), [], []
     origin = board.GetDesignSettings().GetAuxOrigin()
     for ref, comp in COMPONENTS.items():
-        if not assembled(comp, with_small_chips):
+        if not assembled(comp, with_esp32):
             continue
         fp = fps[ref]
         if fp.IsFlipped():
@@ -67,7 +69,7 @@ def export_bom_cpl(with_small_chips=False):
         pos = fp.GetPosition()
         rot = (fp.GetOrientationDegrees() + ROTATION_FIX.get(ref, ROTATION_FIX.get(key[2], 0))) % 360
         rows.append([ref, f'{pcbnew.ToMM(pos.x - origin.x):.3f}mm', f'{-pcbnew.ToMM(pos.y - origin.y):.3f}mm', 'Top', f'{rot:.1f}'])
-    suffix = '-with-small-chips' if with_small_chips else ''
+    suffix = '-with-esp32' if with_esp32 else ''
     with open(OUT / f'bom{suffix}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
         w.writerow(['Comment', 'Designator', 'Footprint', 'LCSC Part #'])
@@ -104,8 +106,9 @@ def export_hand_list():
 if __name__ == '__main__':
     OUT.mkdir(exist_ok=True)
     print('Gerbers:', export_gerbers().name)
-    lines, parts, problems = export_bom_cpl()
-    print(f'BOM {lines} lines, CPL {parts} parts')
-    for p in problems:
-        print('PROBLEM:', p)
+    for esp in (False, True):
+        lines, parts, problems = export_bom_cpl(esp)
+        print(f"{'With ESP32' if esp else 'Economic'}: BOM {lines} lines, CPL {parts} parts")
+        for p in problems:
+            print('PROBLEM:', p)
     print('Hand-solder list:', export_hand_list(), 'parts')
