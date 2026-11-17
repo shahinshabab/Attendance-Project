@@ -16,6 +16,8 @@ _autosave-*
 # Generated fabrication output: rebuild from the design files for each order.
 # Attach the exact files sent to JLCPCB to a GitHub release instead of committing them.
 production/
+production-*/
+robu/production/
 gerbers/
 *.zip
 

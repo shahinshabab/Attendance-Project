@@ -270,7 +270,9 @@ pcb/
   README.md                  this specification
   attendance-board/          KiCad project (.kicad_pro, .kicad_sch, .kicad_pcb)
   libraries/                 project-specific symbols and footprints
-  production/                generated; git-ignored (attach to a GitHub release per order)
+  production-jlcpcb/         generated; git-ignored. Files sent to JLCPCB (tag jlcpcb-production-v0.2;
+                             jlcpcb-production-v0.2.zip keeps the exact uploaded Gerbers, BOM and CPL)
+  robu/                      planned pre-production board from robu.in modules (not started)
     gerbers.zip              copper, mask, silkscreen, outline, drill
     bom.csv                  Comment, Designator, Footprint, LCSC Part #
     positions.csv            pick-and-place (CPL) for top-side assembly

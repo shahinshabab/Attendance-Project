@@ -2,7 +2,7 @@
 
 Run with KiCad's Python after gen_schematic.py, gen_pcb.py --route and a clean DRC:
     <KiCad>/bin/python.exe gen_production.py
-Writes pcb/production/ (git-ignored): attendance-board-gerbers.zip, bom.csv, cpl.csv.
+Writes pcb/production-jlcpcb/ (git-ignored): attendance-board-gerbers.zip, bom.csv, cpl.csv.
 Only FRONT-side parts with an LCSC number that are not DNP go in the BOM and CPL; BT1, J3 and J7
 (back side) and the headers J5/J9/J11 are hand-soldered.
 """
@@ -20,7 +20,7 @@ from design import COMPONENTS
 
 HERE = Path(__file__).resolve().parent
 BOARD_FILE = HERE.parent / 'attendance-board/attendance-board.kicad_pcb'
-OUT = HERE.parent / 'production'
+OUT = HERE.parent / 'production-jlcpcb'
 CLI = symbols.KICAD / 'bin' / ('kicad-cli.exe' if (symbols.KICAD / 'bin/kicad-cli.exe').exists() else 'kicad-cli')
 LAYERS = 'F.Cu,B.Cu,F.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts'
 
