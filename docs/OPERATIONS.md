@@ -3,7 +3,7 @@
 ## What is implemented
 
 - R307 two-scan enrollment, matching, protected deletion, and capacity query via USB.
-- 1.8" TFT display (ESP32): date, clock, Wi-Fi state, result screens and enrollment steps, as in docs/tft-screens.png. The NodeMCU build still uses the four-pin OLED. A matched finger shows **Verified** with one short beep (TMB12A05 buzzer on D32; long beep for errors). There is no IN/OUT button; the server decides IN/OUT.
+- 1.8" TFT display (ESP32): date, clock, Wi-Fi state, result screens and enrollment steps, as in docs/tft-screens.png. The NodeMCU build still uses the four-pin OLED. A matched finger shows **Verified** with the person's name and employee code (from the staff list saved on the scanner, so it works offline) with one short beep (TMB12A05 buzzer on D32; long beep for errors). There is no IN/OUT button; the server decides IN/OUT.
 - USB attendance forwarding or standalone Wi-Fi HTTPS delivery.
 - Two Wi-Fi networks in Wi-Fi mode: the office network sent from the dashboard (first priority, saved in the ESP32's flash) and a fallback phone hotspot compiled into the firmware (`FALLBACK_WIFI_SSID`/`PASSWORD` in `config.h`).
 - Server-requested enrollment: the dashboard asks the scanner to enroll a staff member; the slot is chosen by the server and bound automatically on success.

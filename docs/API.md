@@ -60,7 +60,7 @@ The scanner calls `POST /api/device/sync` about every 10 seconds with its status
  "command": {"id": 7, "type": "enroll", "slot": 2, "employee_code": "EMP001", "employee_name": "Shabab"}}
 ```
 
-`wifi` is sent only while the scanner's applied version differs. It saves it to flash and reconnects. Enrollment status goes `pending` → `active` (sent to the scanner; re-sent after a reboot until a result arrives) → `enrolled` / `failed` / `cancelled`. Slots are allocated above every slot ever bound or attempted on that scanner, so a slot is never reused for a different person. The scanner stores its result in flash before reporting it, and does not take new work until the server has received it.
+Scanners that keep a staff list send `roster_version`; while it differs from the server's, the reply also has `"roster": {"version": "…", "people": [[slot, "HVBL00161", "Shabab", 1], …]}` (slot, employee code, name, active). The scanner saves it in flash as `/roster.json`, so a match shows the name and code even without internet, and adds a newly enrolled person immediately. `wifi` is sent only while the scanner's applied version differs. It saves it to flash and reconnects. Enrollment status goes `pending` → `active` (sent to the scanner; re-sent after a reboot until a result arrives) → `enrolled` / `failed` / `cancelled`. Slots are allocated above every slot ever bound or attempted on that scanner, so a slot is never reused for a different person. The scanner stores its result in flash before reporting it, and does not take new work until the server has received it.
 
 ## USB protocol
 

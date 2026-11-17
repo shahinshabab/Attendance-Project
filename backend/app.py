@@ -104,6 +104,8 @@ class DeviceReport(BaseModel):
     rtc: bool = False
     touch: bool = False
     uptime_ms: int = Field(default=0, ge=0)
+    # Version of the scanner's saved slot -> staff list; None = firmware that does not keep one.
+    roster_version: str | None = Field(default=None, max_length=32)
 
 
 class EnrollmentResult(BaseModel):
@@ -429,6 +431,14 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
                 raise HTTPException(409, 'This enrollment has already finished')
             return enrollment_rows(db, 'WHERE n.id=?', (enrollment_id,))[0]
 
+    def roster(db, device_id):
+        """Who is in each slot of this scanner, so it can show names offline; the version changes with the list."""
+        people = [[r['template_id'], r['employee_code'], r['name'], int(r['active'])] for r in db.execute(
+            '''SELECT b.template_id, b.employee_code, p.name, p.active FROM bindings b
+               JOIN employees p ON p.code=b.employee_code WHERE b.device_id=? ORDER BY b.template_id''', (device_id,))]
+        version = hashlib.sha256(json.dumps(people, separators=(',', ':')).encode()).hexdigest()[:12]
+        return version, people
+
     @app.post('/api/device/sync')
     def device_sync(report: DeviceReport, x_api_key: str = Header(default='')):
         require_device(report.device_id, x_api_key)
@@ -442,6 +452,10 @@ def create_app(database_path=None, admin_key=None, device_keys=None, live_second
             wifi = db.execute('SELECT ssid, password, version FROM device_wifi WHERE device_id=?', (report.device_id,)).fetchone()
             if wifi and wifi['version'] != report.wifi_version:
                 reply['wifi'] = dict(wifi)
+            if report.roster_version is not None:
+                version, people = roster(db, report.device_id)
+                if version != report.roster_version:
+                    reply['roster'] = {'version': version, 'people': people}
             # An 'active' command is re-sent until the device reports a result, e.g. after a reboot mid-enrollment.
             command = db.execute('''SELECT n.id, n.template_id, n.employee_code, p.name FROM enrollments n
                 JOIN employees p ON p.code=n.employee_code WHERE n.device_id=? AND n.status IN ('pending', 'active')

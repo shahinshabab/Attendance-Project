@@ -251,3 +251,16 @@ def test_scan_from_unassigned_slot_stays_unknown(client):
         'event_id': 'auto-0009', 'device_id': 'office-01', 'template_id': 7, 'occurred_at': '2026-11-03T03:30:00Z',
         'confidence': 90, 'uptime_ms': 1})
     assert client.get('/api/attendance', headers=HEADERS).json()[0]['action'] == 'SCAN'
+
+
+def test_scanner_gets_slot_names_only_when_its_saved_list_is_stale(client):
+    client.post('/api/employees', headers=HEADERS, json={'code': 'HVBL00161', 'name': 'Shabab'})
+    client.post('/api/bindings', headers=HEADERS, json={'device_id': 'office-01', 'template_id': 1, 'employee_code': 'HVBL00161'})
+    sync = lambda **extra: client.post('/api/device/sync', headers=DEVICE_HEADERS, json={'device_id': 'office-01', **extra}).json()
+    assert 'roster' not in sync()  # older firmware never receives it
+    first = sync(roster_version='')['roster']
+    assert first['people'] == [[1, 'HVBL00161', 'Shabab', 1]]
+    assert 'roster' not in sync(roster_version=first['version'])
+    client.post('/api/employees', headers=HEADERS, json={'code': 'HVBL00161', 'name': 'Shabab P', 'active': False})
+    changed = sync(roster_version=first['version'])['roster']
+    assert changed['version'] != first['version'] and changed['people'] == [[1, 'HVBL00161', 'Shabab P', 0]]

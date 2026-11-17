@@ -23,7 +23,7 @@
 #include "config.h"
 #include "display.h"
 
-constexpr char FIRMWARE_VERSION[] = "0.6.3-dev";
+constexpr char FIRMWARE_VERSION[] = "0.7.0-dev";
 constexpr uint32_t WIFI_ATTEMPT_MS = 20000;   // per network before trying the other one
 constexpr uint32_t OFFICE_RETRY_MS = 300000;  // while on the fallback hotspot, retry office Wi-Fi
 constexpr uint32_t SYNC_INTERVAL_MS = 10000;  // server check-in: Wi-Fi updates and enrollment requests
@@ -197,6 +197,51 @@ String writeAtomic(const String &path, const String &content) {
   if (written != content.length()) return "short write " + String(written) + "/" + String(content.length()) + " (errno " + String(errno) + ")";
   if (!LittleFS.rename("/pending.tmp", path)) return "rename to " + path + " failed (errno " + String(errno) + ")";
   return "";
+}
+
+// ---- Slot -> staff list from the server, saved in flash so names show without internet ----
+struct Person { uint16_t slot; String code, name; bool active; };
+std::vector<Person> people;
+String rosterVersion;  // "" = never received or changed here: the server sends its list on the next sync
+const Person *findPerson(uint16_t slot) {
+  for (const Person &p : people) if (p.slot == slot) return &p;
+  return nullptr;
+}
+void readPeople(JsonArrayConst list) {
+  people.clear();
+  for (JsonVariantConst row : list)
+    people.push_back({uint16_t(row[0] | 0), String(row[1] | ""), String(row[2] | ""), (row[3] | 1) != 0});
+}
+void saveRoster() {
+  if (!storageReady) return;
+  DynamicJsonDocument d(1024 + people.size() * 192);
+  d["version"] = rosterVersion;
+  JsonArray list = d.createNestedArray("people");
+  for (const Person &p : people) { JsonArray row = list.createNestedArray(); row.add(p.slot); row.add(p.code); row.add(p.name); row.add(p.active ? 1 : 0); }
+  String text; serializeJson(d, text);
+  String problem = writeAtomic("/roster.json", text);
+  if (problem.length()) { LittleFS.remove("/roster.json"); problem = writeAtomic("/roster.json", text); }
+  if (problem.length()) logMessage("Cannot save staff list: " + problem);
+}
+void loadRoster() {
+  File f = LittleFS.open("/roster.json", "r");
+  if (!f) { logMessage("No saved staff list yet; it comes from the server"); return; }
+  DynamicJsonDocument d(f.size() * 2 + 1024);
+  DeserializationError error = deserializeJson(d, f); f.close();
+  if (error) { logMessage("Saved staff list unreadable; waiting for the server"); return; }
+  rosterVersion = d["version"] | ""; readPeople(d["people"].as<JsonArrayConst>());
+  logMessage("Staff list loaded: " + String(people.size()) + " people");
+}
+void applyRoster(JsonObjectConst roster) {
+  rosterVersion = roster["version"] | ""; readPeople(roster["people"].as<JsonArrayConst>()); saveRoster();
+  logMessage("Staff list updated from server: " + String(people.size()) + " people");
+}
+// Right after a successful enrollment, before the server's list arrives.
+void rememberPerson(uint16_t slot, const String &code, const String &name) {
+  rosterVersion = "";
+  for (Person &p : people) if (p.slot == slot) { p.code = code; p.name = name; p.active = true; saveRoster(); return; }
+  people.push_back({slot, code, name, true});
+  saveRoster();
 }
 bool enqueue(uint16_t slot, uint16_t confidence) {
   if (!storageReady) { logMessage("Scan NOT saved: storage not mounted"); return false; }
@@ -437,12 +482,13 @@ void sendResult() {
 void runCommand(JsonObject command) {
   if (String(command["type"] | "") != "enroll") return;
   int id = command["id"] | 0, slot = command["slot"] | 0;
-  String who = command["employee_name"] | "";
-  if (!who.length()) who = command["employee_code"] | "";
+  String code = command["employee_code"] | "", who = command["employee_name"] | "";
+  if (!who.length()) who = code;
   if (id <= 0) return;
   logMessage("Server requested enrollment " + String(id) + " for " + who + " in slot " + String(slot));
   tls.stop();  // the server closes idle connections during a long enrollment
   String message; bool ok = enroll(slot, who, ENROLL_WAIT_MS, message);
+  if (ok && slot > 0 && code.length()) rememberPerson(slot, code, who);
   delay(2500);  // keep the outcome readable on the display
   // Persist before reporting so a reset or outage cannot lose a stored template's result.
   settings.putBool("res_ok", ok); settings.putString("res_msg", message.substring(0, 190)); settings.putInt("res_id", id);
@@ -494,22 +540,24 @@ void syncServer() {
   if (lastSync && millis() - lastSync < SYNC_INTERVAL_MS) return;
   lastSync = millis();
   if (sensorReady) finger.getTemplateCount();
-  StaticJsonDocument<512> d;
+  StaticJsonDocument<768> d;
   d["device_id"] = DEVICE_ID; d["firmware"] = FIRMWARE_VERSION;
   d["network"] = netTarget == NET_OFFICE ? "office" : "fallback"; d["ssid"] = WiFi.SSID();
   d["rssi"] = constrain(WiFi.RSSI(), -127, 0); d["wifi_version"] = wifiVersion; d["office_error"] = officeError;
   d["pending"] = pending.size(); d["sensor"] = sensorReady;
   d["templates"] = sensorReady ? finger.templateCount : 0; d["capacity"] = sensorReady ? finger.capacity : 0;
   d["clock_ok"] = time(nullptr) > 1700000000; d["rtc"] = rtcReady; d["touch"] = touchActive >= 0; d["uptime_ms"] = millis();
+  d["roster_version"] = rosterVersion;
   String body, reply; serializeJson(d, body);
   bool wasOk = serverOk;
   int code = post("/api/device/sync", body, reply);
   if (code != 200) { logMessage("Server sync HTTP " + String(code)); if (wasOk) redraw(); return; }
   if (!wasOk) redraw();
-  DynamicJsonDocument answer(1536);
+  DynamicJsonDocument answer(reply.length() * 2 + 1536);  // the staff list can be several KB
   if (deserializeJson(answer, reply)) return;
   // Server time over verified HTTPS covers offices where NTP is blocked.
   trustServerTime(answer["server_time"] | 0);
+  if (answer["roster"].is<JsonObject>()) applyRoster(answer["roster"].as<JsonObjectConst>());
   if (answer["wifi"].is<JsonObject>()) { applyWifi(answer["wifi"].as<JsonObject>()); return; }
   if (answer["command"].is<JsonObject>()) runCommand(answer["command"].as<JsonObject>());
 }
@@ -558,7 +606,7 @@ void command(String line) {
     if (sensorReady) finger.getTemplateCount();
     logMessage("Device " + String(DEVICE_ID) + "; firmware=" + FIRMWARE_VERSION + "; sensor=" + String(sensorReady) +
       "; display=" + displayInfo() + "; buzzer=" + String(BUZZER_PIN < 0 ? "none" : buzzerOn ? "on" : "muted") +
-      "; storage=" + String(storageReady) + (storageReady ? fsUsage() : String("")) + "; pending=" + String(pending.size()) +
+      "; storage=" + String(storageReady) + (storageReady ? fsUsage() : String("")) + "; pending=" + String(pending.size()) + "; staff=" + String(people.size()) +
       "; time=" + clockText() + "; capacity=" + String(finger.capacity) +
       "; templates=" + String(finger.templateCount) + "; rtc=" + String(rtcReady) + "; touch=" + String(touchActive >= 0 ? (touchActive == HIGH ? "high" : "low") : "none") +
       (FINGER_TOUCH_PIN >= 0 ? "; touch_now=" + String(digitalRead(FINGER_TOUCH_PIN) ? "high" : "low") : String("")) + "; heap=" + String(ESP.getFreeHeap()) + iramHeap() + "; net=" + networkName() +
@@ -637,7 +685,7 @@ void setup() {
 #else
   storageReady = LittleFS.begin(false);
 #endif
-  if (storageReady) loadQueue();
+  if (storageReady) { loadQueue(); loadRoster(); }
 #if !defined(ESP8266)
   sensorSerial.begin(SENSOR_BAUD, SERIAL_8N1, SENSOR_RX, SENSOR_TX);
 #endif
@@ -699,11 +747,17 @@ void loop() {
   int result = finger.fingerSearch();
   if (result == FINGERPRINT_NOTFOUND) { show(View::Error, "Not registered", "", "Please contact the admin"); return; }
   if (result != FINGERPRINT_OK) { show(View::Error, "Sensor error", "", "Please try again"); return; }
+  // Name and code from the saved staff list, so this works without internet.
+  const Person *person = findPerson(finger.fingerID);
+  String who = "Slot " + String(finger.fingerID);
+  if (person && person->name.length()) who = person->name;
   if (finger.fingerID == lastFinger && millis() - lastMatch < 10000) {
-    show(View::Info, "Already scanned", "Slot " + String(finger.fingerID), "Saved a moment ago"); return;
+    show(View::Info, "Already scanned", who, "Saved a moment ago"); return;
   }
   if (enqueue(finger.fingerID, finger.confidence)) {
     lastFinger = finger.fingerID; lastMatch = millis();
-    show(View::Ok, "Verified", "Slot " + String(finger.fingerID), "Saved");
+    if (!person) show(View::Ok, "Verified", who, "Not assigned to staff");
+    else if (!person->active) show(View::Warn, "Not active", who, "Contact the admin");
+    else show(View::Ok, "Verified", who, person->code);
   } else show(View::Error, "Not saved", "", "Storage or queue full", 5000);
 }
